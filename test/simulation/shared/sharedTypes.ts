@@ -24,6 +24,7 @@ export const INLINE_INITIAL_DOC_TAG = 'inline-initial-doc-tag';
 export const INLINE_CHANGED_DOC_TAG = 'inline-changed-doc-tag';
 export const INLINE_STATE_TAG = 'inline-state-tag';
 export const INLINE_NOTEBOOK_EXECUTION_TAG = 'inline-notebook-execution-tag';
+export const INLINE_HISTORY_TAG = 'inline-history-tag';
 
 export const SIDEBAR_RAW_RESPONSE_TAG = 'sidebar-raw-response-tag';
 

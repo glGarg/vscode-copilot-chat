@@ -26,9 +26,10 @@ import { ITestingServicesAccessor, TestingServiceCollection } from '../../src/pl
 import { IFile, isNotebook, SimulationWorkspace } from '../../src/platform/test/node/simulationWorkspace';
 import { ChatResponseStreamImpl } from '../../src/util/common/chatResponseStreamImpl';
 import { getLanguage, getLanguageForResource } from '../../src/util/common/languages';
-import { ChatRequestTurn, ChatResponseTurn } from '../../src/util/common/test/shims/chatTypes';
 import { ExtHostNotebookDocumentData } from '../../src/util/common/test/shims/notebookDocument';
 import { createTextDocumentData, IExtHostDocumentData } from '../../src/util/common/test/shims/textDocument';
+import { ChatRequestTurn, ChatResponseTurn, ChatResponseMarkdownPart } from '../../src/util/common/test/shims/chatTypes';
+import * as fs from 'fs';
 import { CancellationToken } from '../../src/util/vs/base/common/cancellation';
 import { Event } from '../../src/util/vs/base/common/event';
 import { ResourceMap } from '../../src/util/vs/base/common/map';
@@ -47,10 +48,157 @@ import { readBuiltinIntents } from '../intent/intentTest';
 import { getDiagnostics } from './diagnosticProviders';
 import { convertTestToVSCodeDiagnostics } from './diagnosticProviders/utils';
 import { SimulationLanguageFeaturesService } from './language/simulationLanguageFeatureService';
-import { IDiagnostic, IDiagnosticComparison, INLINE_CHANGED_DOC_TAG, INLINE_INITIAL_DOC_TAG, INLINE_STATE_TAG, IRange, IWorkspaceState, IWorkspaceStateFile } from './shared/sharedTypes';
+import { IDiagnostic, IDiagnosticComparison, INLINE_CHANGED_DOC_TAG, INLINE_INITIAL_DOC_TAG, INLINE_STATE_TAG, INLINE_HISTORY_TAG, IRange, IWorkspaceState, IWorkspaceStateFile } from './shared/sharedTypes';
 import { DiagnosticProviderId, EditTestStrategy, IDeserializedWorkspaceStateBasedScenario, IInlineEdit, IOutcome, IScenario, IScenarioDiagnostic, IScenarioQuery, OutcomeAnnotation } from './types';
 
 export type SimulationWorkspaceInput = { files: IFile[]; workspaceFolders?: Uri[] } | { workspaceState: IDeserializedWorkspaceState };
+
+export interface ITrajectoryTurn {
+	type: 'request' | 'response';
+	prompt?: string;
+	command?: string;
+	references?: any[];
+	participant?: string;
+	toolReferences?: any[];
+	response?: any[];
+	result?: any;
+}
+
+export interface ITrajectoryData {
+	instance_id: string;
+	description?: string;
+	history: ITrajectoryTurn[];
+}
+
+export interface ITrajectoryCollection {
+	[instance_id: string]: ITrajectoryData;
+}
+
+export function loadTrajectories(trajectoryFilePath: string): ITrajectoryCollection {
+	const trajectoryData = fs.readFileSync(trajectoryFilePath, 'utf8');
+	return JSON.parse(trajectoryData) as ITrajectoryCollection;
+}
+
+export function convertTrajectoryToHistory(trajectory: ITrajectoryData): (ChatRequestTurn | ChatResponseTurn)[] {
+	const history: (ChatRequestTurn | ChatResponseTurn)[] = [];
+	
+	for (const turn of trajectory.history) {
+		if (turn.type === 'request') {
+			history.push(new ChatRequestTurn(
+				turn.prompt || '',
+				turn.command,
+				turn.references || [],
+				turn.participant || '',
+				turn.toolReferences || []
+			));
+		} else if (turn.type === 'response') {
+			const responseParts = (turn.response || []).map(part => {
+				if (part.type === 'markdown') {
+					return new ChatResponseMarkdownPart(part.value);
+				}
+				return part;
+			});
+			history.push(new ChatResponseTurn(
+				responseParts,
+				turn.result || { metadata: {} },
+				turn.participant || '',
+				turn.command
+			));
+		}
+	}
+	
+	return history;
+}
+
+export function loadTrajectoryByInstanceId(trajectoryFilePath: string, instanceId: string): ITrajectoryData | undefined {
+	const trajectories = loadTrajectories(trajectoryFilePath);
+	return trajectories[instanceId];
+}
+
+export async function simulateInlineChatWithTrajectory(
+	testingServiceCollection: TestingServiceCollection,
+	scenario: IScenario,
+	trajectoryFilePath: string,
+	instanceId: string,
+	strategy: EditTestStrategy = EditTestStrategy.Inline
+): Promise<void> {
+	const trajectoryData = loadTrajectoryByInstanceId(trajectoryFilePath, instanceId);
+	if (!trajectoryData) {
+		throw new Error(`Trajectory with instance_id '${instanceId}' not found in ${trajectoryFilePath}`);
+	}
+	
+	return simulateInlineChatWithStrategy(strategy, testingServiceCollection, scenario, trajectoryData);
+}
+
+export async function simulateInlineChatAndSaveHistory(
+	testingServiceCollection: TestingServiceCollection,
+	scenario: IScenario,
+	instanceId: string,
+	description?: string,
+	strategy: EditTestStrategy = EditTestStrategy.Inline,
+	autoSaveAt50: boolean = true
+): Promise<void> {
+	const saveHistoryOptions = {
+		instanceId,
+		description: description || `Generated history for ${instanceId}`,
+		autoSaveAt50
+	};
+	
+	return simulateInlineChatWithStrategy(strategy, testingServiceCollection, scenario, undefined, saveHistoryOptions);
+}
+
+export async function simulateInlineChatWithAutoSave(
+	testingServiceCollection: TestingServiceCollection,
+	scenario: IScenario,
+	instanceId: string,
+	description?: string,
+	strategy: EditTestStrategy = EditTestStrategy.Inline
+): Promise<void> {
+	const saveHistoryOptions = {
+		instanceId,
+		description: description || `Auto-captured trajectory for ${instanceId}`,
+		autoSaveAt50: true
+	};
+	
+	return simulateInlineChatWithStrategy(strategy, testingServiceCollection, scenario, undefined, saveHistoryOptions);
+}
+
+export function serializeHistoryForSaving(history: (ChatRequestTurn | ChatResponseTurn)[]): ITrajectoryTurn[] {
+	return history.map(turn => {
+		if (turn instanceof ChatRequestTurn) {
+			return {
+				type: 'request' as const,
+				prompt: turn.prompt,
+				command: turn.command,
+				references: turn.references.map(ref => ({
+					id: (ref as any).id,
+					value: (ref as any).value,
+					...ref
+				})),
+				participant: turn.participant,
+				toolReferences: turn.toolReferences
+			};
+		} else if (turn instanceof ChatResponseTurn) {
+			return {
+				type: 'response' as const,
+				response: turn.response.map(part => {
+					if (part instanceof ChatResponseMarkdownPart) {
+						return {
+							type: 'markdown',
+							value: typeof part.value === 'string' ? part.value : part.value.value
+						};
+					}
+					return part;
+				}),
+				result: turn.result,
+				participant: turn.participant,
+				command: turn.command
+			};
+		}
+		return turn;
+	});
+}
+
 
 export function setupSimulationWorkspace(testingServiceCollection: TestingServiceCollection, input: SimulationWorkspaceInput): SimulationWorkspace {
 	const workspace = isInExtensionHost ? new SimulationWorkspaceExtHost() : new SimulationWorkspace();
@@ -76,18 +224,20 @@ function isDeserializedWorkspaceStateBasedScenario(scenario: IScenario): scenari
 	return 'workspaceState' in scenario;
 }
 
-export function simulateInlineChatWithStrategy(strategy: EditTestStrategy, testingServiceCollection: TestingServiceCollection, scenario: IScenario) {
+export function simulateInlineChatWithStrategy(strategy: EditTestStrategy, testingServiceCollection: TestingServiceCollection, scenario: IScenario, trajectoryData?: ITrajectoryData, saveHistoryOptions?: { instanceId: string; description?: string; autoSaveAt50?: boolean }) {
 
 	if (strategy === EditTestStrategy.Inline2) {
-		return simulateInlineChat3(testingServiceCollection, scenario);
+		return simulateInlineChat3(testingServiceCollection, scenario, trajectoryData, saveHistoryOptions);
 	} else {
-		return simulateInlineChat(testingServiceCollection, scenario);
+		return simulateInlineChat(testingServiceCollection, scenario, trajectoryData, saveHistoryOptions);
 	}
 }
 
 export async function simulateInlineChat(
 	testingServiceCollection: TestingServiceCollection,
-	scenario: IScenario
+	scenario: IScenario,
+	trajectoryData?: ITrajectoryData,
+	saveHistoryOptions?: { instanceId: string; description?: string; autoSaveAt50?: boolean }
 ): Promise<void> {
 	const host: EditingSimulationHost = {
 		prepareChatRequestLocation: (accessor: ITestingServicesAccessor, wholeRange?: Range) => {
@@ -101,12 +251,14 @@ export async function simulateInlineChat(
 			};
 		}
 	};
-	return simulateEditingScenario(testingServiceCollection, scenario, host);
+	return simulateEditingScenario(testingServiceCollection, scenario, host, trajectoryData, saveHistoryOptions);
 }
 
 export async function simulateInlineChat3(
 	testingServiceCollection: TestingServiceCollection,
-	scenario: IScenario
+	scenario: IScenario,
+	trajectoryData?: ITrajectoryData,
+	saveHistoryOptions?: { instanceId: string; description?: string; autoSaveAt50?: boolean }
 ): Promise<void> {
 	const host: EditingSimulationHost = {
 		agentArgs: {
@@ -125,12 +277,14 @@ export async function simulateInlineChat3(
 			};
 		}
 	};
-	return simulateEditingScenario(testingServiceCollection, scenario, host);
+	return simulateEditingScenario(testingServiceCollection, scenario, host, trajectoryData, saveHistoryOptions);
 }
 
 export async function simulateInlineChat2(
 	testingServiceCollection: TestingServiceCollection,
-	scenario: IScenario
+	scenario: IScenario,
+	trajectoryData?: ITrajectoryData,
+	saveHistoryOptions?: { instanceId: string; description?: string; autoSaveAt50?: boolean }
 ): Promise<void> {
 
 	const overrideCommand = '/edit';
@@ -160,7 +314,7 @@ export async function simulateInlineChat2(
 			};
 		}
 	};
-	return simulateEditingScenario(testingServiceCollection, massagedScenario, host);
+	return simulateEditingScenario(testingServiceCollection, massagedScenario, host, trajectoryData, saveHistoryOptions);
 }
 
 export type EditingSimulationHostResponseProcessor = {
@@ -182,12 +336,14 @@ export interface EditingSimulationHost {
 export async function simulateEditingScenario(
 	testingServiceCollection: TestingServiceCollection,
 	scenario: IScenario,
-	host: EditingSimulationHost
+	host: EditingSimulationHost,
+	trajectoryData?: ITrajectoryData,
+	saveHistoryOptions?: { instanceId: string; description?: string; autoSaveAt50?: boolean }
 ): Promise<void> {
 	assert(scenario.queries.length > 0, `Cannot simulate scenario with no queries`);
 	assert(isDeserializedWorkspaceStateBasedScenario(scenario) || scenario.files.length > 0, `Cannot simulate scenario with no files`);
 
-	const workspace = setupSimulationWorkspace(testingServiceCollection, scenario);
+    const workspace = setupSimulationWorkspace(testingServiceCollection, scenario);
 
 	await scenario.extraWorkspaceSetup?.(workspace);
 	const accessor = testingServiceCollection.createTestingAccessor();
@@ -199,13 +355,13 @@ export async function simulateEditingScenario(
 	const states: IWorkspaceState[] = [];
 	let range: Range | undefined;
 	let isFirst = true;
-	const history: (ChatRequestTurn | ChatResponseTurn)[] = [];
+	const history: (ChatRequestTurn | ChatResponseTurn)[] = trajectoryData ? convertTrajectoryToHistory(trajectoryData) : [];
 	/**
 	 * A map from doc to relative path with initial contents which is populated right before modifying a document.
 	 */
 	const changedDocsInitialStates = new Map<vscode.TextDocument, Promise<IWorkspaceStateFile> | null>();
 
-	// run each query for the scenario
+    // run each query for the scenario
 	try {
 		const seenFiles: vscode.ChatPromptReference[] = [];
 
@@ -485,6 +641,17 @@ export async function simulateEditingScenario(
 			const result = await requestHandler.getResult();
 			history.push(new ChatRequestTurn(request.prompt, request.command, [...request.references], '', []));
 			history.push(new ChatResponseTurn([new ChatResponseMarkdownPart(markdownChunks.join(''))], result, ''));
+            // Auto-save when history reaches 50 turns (25 request-response pairs)
+			if (history.length >= 5) {
+                throw new Error(`4.... Auto-saved trajectory code. Size: ${history.length}`);
+				const trajectoryData: ITrajectoryData = {
+					// instance_id: `${saveHistoryOptions.instanceId}_at50`,
+					// description: `${saveHistoryOptions.description || 'Auto-captured trajectory'} (saved at ${history.length} turns)`,
+					history: serializeHistoryForSaving(history)
+				};
+				await testRuntime.writeFile(`history.txt`, JSON.stringify(trajectoryData, undefined, 2), INLINE_HISTORY_TAG);
+				throw new Error(`Auto-saved trajectory at ${history.length} turns: history.txt`);
+			}
 
 			let annotations = await responseProcessor?.postProcess(accessor, workspace, stream, result) ?? [];
 
@@ -689,6 +856,16 @@ export async function simulateEditingScenario(
 			}
 		}
 	} finally {
+		// Save final history if requested
+		if (saveHistoryOptions) {
+			const trajectoryData: ITrajectoryData = {
+				instance_id: saveHistoryOptions.instanceId,
+				description: saveHistoryOptions.description || `Generated trajectory for ${saveHistoryOptions.instanceId}`,
+				history: serializeHistoryForSaving(history)
+			};
+			await testRuntime.writeFile(`history-${saveHistoryOptions.instanceId}.txt`, JSON.stringify(trajectoryData, undefined, 2), INLINE_HISTORY_TAG);
+		}
+		
 		await teardownSimulationWorkspace(accessor, workspace);
 		await testRuntime.writeFile('inline-simulator.txt', JSON.stringify(states, undefined, 2), INLINE_STATE_TAG); // TODO@test: using .txt instead of .json to avoid breaking test scripts
 	}

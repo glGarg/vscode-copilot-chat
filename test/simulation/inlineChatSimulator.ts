@@ -30,6 +30,7 @@ import { ExtHostNotebookDocumentData } from '../../src/util/common/test/shims/no
 import { createTextDocumentData, IExtHostDocumentData } from '../../src/util/common/test/shims/textDocument';
 import { ChatRequestTurn, ChatResponseTurn, ChatResponseMarkdownPart } from '../../src/util/common/test/shims/chatTypes';
 import * as fs from 'fs';
+import * as path from 'path';
 import { CancellationToken } from '../../src/util/vs/base/common/cancellation';
 import { Event } from '../../src/util/vs/base/common/event';
 import { ResourceMap } from '../../src/util/vs/base/common/map';
@@ -74,9 +75,43 @@ export interface ITrajectoryCollection {
 	[instance_id: string]: ITrajectoryData;
 }
 
-export function loadTrajectories(trajectoryFilePath: string): ITrajectoryCollection {
-	const trajectoryData = fs.readFileSync(trajectoryFilePath, 'utf8');
-	return JSON.parse(trajectoryData) as ITrajectoryCollection;
+export function loadTurnIndexedTrajectory(baseDir: string, instanceId: string, maxTurns: number = 50): ITrajectoryData | undefined {
+	const history: ITrajectoryTurn[] = [];
+	
+	// Try to load turn files in order
+	for (let turnIndex = 0; turnIndex < maxTurns; turnIndex++) {
+		const turnFileName = `history-turn-${turnIndex.toString().padStart(3, '0')}.txt`;
+		const turnFilePath = path.join(baseDir, turnFileName);
+		
+		try {
+			if (fs.existsSync(turnFilePath)) {
+				const turnData = fs.readFileSync(turnFilePath, 'utf8');
+				const parsedTurn = JSON.parse(turnData);
+				
+				// Verify this is the turn we expect and for the right instance
+				if (parsedTurn.turnIndex === turnIndex && parsedTurn.instanceId === instanceId) {
+					// Add all turns from this file (should be 2: request + response)
+					history.push(...parsedTurn.turns);
+				}
+			} else {
+				// No more turn files found
+				break;
+			}
+		} catch (error) {
+			console.warn(`Failed to load turn ${turnIndex}: ${error}`);
+			break;
+		}
+	}
+	
+	if (history.length === 0) {
+		return undefined;
+	}
+	
+	return {
+		instance_id: instanceId,
+		description: `Reconstructed trajectory from ${history.length / 2} turns`,
+		history
+	};
 }
 
 export function convertTrajectoryToHistory(trajectory: ITrajectoryData): (ChatRequestTurn | ChatResponseTurn)[] {
@@ -110,6 +145,12 @@ export function convertTrajectoryToHistory(trajectory: ITrajectoryData): (ChatRe
 	return history;
 }
 
+// Legacy functions for backward compatibility
+export function loadTrajectories(trajectoryFilePath: string): ITrajectoryCollection {
+	const trajectoryData = fs.readFileSync(trajectoryFilePath, 'utf8');
+	return JSON.parse(trajectoryData) as ITrajectoryCollection;
+}
+
 export function loadTrajectoryByInstanceId(trajectoryFilePath: string, instanceId: string): ITrajectoryData | undefined {
 	const trajectories = loadTrajectories(trajectoryFilePath);
 	return trajectories[instanceId];
@@ -130,21 +171,47 @@ export async function simulateInlineChatWithTrajectory(
 	return simulateInlineChatWithStrategy(strategy, testingServiceCollection, scenario, trajectoryData);
 }
 
+export async function simulateInlineChatWithTurnIndexedTrajectory(
+	testingServiceCollection: TestingServiceCollection,
+	scenario: IScenario,
+	baseDir: string,
+	instanceId: string,
+	strategy: EditTestStrategy = EditTestStrategy.Inline,
+	maxTurns: number = 50
+): Promise<void> {
+	const trajectoryData = loadTurnIndexedTrajectory(baseDir, instanceId, maxTurns);
+	if (!trajectoryData) {
+		throw new Error(`Turn-indexed trajectory for instance_id '${instanceId}' not found in ${baseDir}`);
+	}
+	
+	console.log(`Loaded trajectory with ${trajectoryData.history.length} turns from ${baseDir}`);
+	return simulateInlineChatWithStrategy(strategy, testingServiceCollection, scenario, trajectoryData);
+}
+
+export async function simulateInlineChatAndSaveTurnIndexedHistory(
+	testingServiceCollection: TestingServiceCollection,
+	scenario: IScenario,
+	instanceId: string,
+	description?: string,
+	strategy: EditTestStrategy = EditTestStrategy.Inline
+): Promise<void> {
+	const saveHistoryOptions = {
+		instanceId,
+		description: description || `Generated turn-indexed history for ${instanceId}`
+	};
+	
+	return simulateInlineChatWithStrategy(strategy, testingServiceCollection, scenario, undefined, saveHistoryOptions);
+}
+
+// Legacy function for backward compatibility
 export async function simulateInlineChatAndSaveHistory(
 	testingServiceCollection: TestingServiceCollection,
 	scenario: IScenario,
 	instanceId: string,
 	description?: string,
-	strategy: EditTestStrategy = EditTestStrategy.Inline,
-	autoSaveAt50: boolean = true
+	strategy: EditTestStrategy = EditTestStrategy.Inline
 ): Promise<void> {
-	const saveHistoryOptions = {
-		instanceId,
-		description: description || `Generated history for ${instanceId}`,
-		autoSaveAt50
-	};
-	
-	return simulateInlineChatWithStrategy(strategy, testingServiceCollection, scenario, undefined, saveHistoryOptions);
+	return simulateInlineChatAndSaveTurnIndexedHistory(testingServiceCollection, scenario, instanceId, description, strategy);
 }
 
 export async function simulateInlineChatWithAutoSave(
@@ -154,13 +221,31 @@ export async function simulateInlineChatWithAutoSave(
 	description?: string,
 	strategy: EditTestStrategy = EditTestStrategy.Inline
 ): Promise<void> {
-	const saveHistoryOptions = {
-		instanceId,
-		description: description || `Auto-captured trajectory for ${instanceId}`,
-		autoSaveAt50: true
-	};
-	
-	return simulateInlineChatWithStrategy(strategy, testingServiceCollection, scenario, undefined, saveHistoryOptions);
+	return simulateInlineChatAndSaveTurnIndexedHistory(testingServiceCollection, scenario, instanceId, description, strategy);
+}
+
+async function getNextTurnIndex(testRuntime: any): Promise<number> {
+	// Scan for existing turn files to find the highest index
+	let turnIndex = 0;
+	while (turnIndex < 50) {
+		const turnFileName = `history-turn-${turnIndex.toString().padStart(3, '0')}.txt`;
+		try {
+			// Try to read the file to see if it exists
+			await testRuntime.readFile(turnFileName, INLINE_HISTORY_TAG);
+			turnIndex++;
+            throw new Error(`File found.`);
+			// If we got here, the file exists, so increment and check next
+		} catch (error) {
+			// File doesn't exist, so this is our next available index
+			if (turnIndex > 0)
+            {
+                throw error;
+            } else {
+                break;
+            }
+		}
+	}
+	return turnIndex;
 }
 
 export function serializeHistoryForSaving(history: (ChatRequestTurn | ChatResponseTurn)[]): ITrajectoryTurn[] {
@@ -237,7 +322,7 @@ export async function simulateInlineChat(
 	testingServiceCollection: TestingServiceCollection,
 	scenario: IScenario,
 	trajectoryData?: ITrajectoryData,
-	saveHistoryOptions?: { instanceId: string; description?: string; autoSaveAt50?: boolean }
+	saveHistoryOptions?: { instanceId: string; description?: string }
 ): Promise<void> {
 	const host: EditingSimulationHost = {
 		prepareChatRequestLocation: (accessor: ITestingServicesAccessor, wholeRange?: Range) => {
@@ -258,7 +343,7 @@ export async function simulateInlineChat3(
 	testingServiceCollection: TestingServiceCollection,
 	scenario: IScenario,
 	trajectoryData?: ITrajectoryData,
-	saveHistoryOptions?: { instanceId: string; description?: string; autoSaveAt50?: boolean }
+	saveHistoryOptions?: { instanceId: string; description?: string }
 ): Promise<void> {
 	const host: EditingSimulationHost = {
 		agentArgs: {
@@ -284,7 +369,7 @@ export async function simulateInlineChat2(
 	testingServiceCollection: TestingServiceCollection,
 	scenario: IScenario,
 	trajectoryData?: ITrajectoryData,
-	saveHistoryOptions?: { instanceId: string; description?: string; autoSaveAt50?: boolean }
+	saveHistoryOptions?: { instanceId: string; description?: string }
 ): Promise<void> {
 
 	const overrideCommand = '/edit';
@@ -338,7 +423,7 @@ export async function simulateEditingScenario(
 	scenario: IScenario,
 	host: EditingSimulationHost,
 	trajectoryData?: ITrajectoryData,
-	saveHistoryOptions?: { instanceId: string; description?: string; autoSaveAt50?: boolean }
+	saveHistoryOptions?: { instanceId: string; description?: string }
 ): Promise<void> {
 	assert(scenario.queries.length > 0, `Cannot simulate scenario with no queries`);
 	assert(isDeserializedWorkspaceStateBasedScenario(scenario) || scenario.files.length > 0, `Cannot simulate scenario with no files`);
@@ -355,6 +440,8 @@ export async function simulateEditingScenario(
 	const states: IWorkspaceState[] = [];
 	let range: Range | undefined;
 	let isFirst = true;
+	// Determine the current turn index by checking existing files
+	let turnIndex = await getNextTurnIndex(testRuntime);
 	const history: (ChatRequestTurn | ChatResponseTurn)[] = trajectoryData ? convertTrajectoryToHistory(trajectoryData) : [];
 	/**
 	 * A map from doc to relative path with initial contents which is populated right before modifying a document.
@@ -641,18 +728,17 @@ export async function simulateEditingScenario(
 			const result = await requestHandler.getResult();
 			history.push(new ChatRequestTurn(request.prompt, request.command, [...request.references], '', []));
 			history.push(new ChatResponseTurn([new ChatResponseMarkdownPart(markdownChunks.join(''))], result, ''));
-            // Auto-save when history reaches 50 turns (25 request-response pairs)
-			if (history.length >= 5) {
-                throw new Error(`4.... Auto-saved trajectory code. Size: ${history.length}`);
-				const trajectoryData: ITrajectoryData = {
-					// instance_id: `${saveHistoryOptions.instanceId}_at50`,
-					// description: `${saveHistoryOptions.description || 'Auto-captured trajectory'} (saved at ${history.length} turns)`,
-					history: serializeHistoryForSaving(history)
+			
+			// Save this turn if we have save options and haven't exceeded turn 50
+			if (turnIndex < 50) {
+				const turnData = {
+					turnIndex,
+					//instanceId: saveHistoryOptions.instanceId,
+					//description: saveHistoryOptions.description,
+					turns: serializeHistoryForSaving(history) // This will be just the current 2 turns
 				};
-				await testRuntime.writeFile(`history.txt`, JSON.stringify(trajectoryData, undefined, 2), INLINE_HISTORY_TAG);
-				throw new Error(`Auto-saved trajectory at ${history.length} turns: history.txt`);
+				await testRuntime.writeFile(`history-turn-${turnIndex.toString().padStart(3, '0')}.txt`, JSON.stringify(turnData, undefined, 2), INLINE_HISTORY_TAG);
 			}
-
 			let annotations = await responseProcessor?.postProcess(accessor, workspace, stream, result) ?? [];
 
 			let interactionOutcomeKind = interactionOutcomeComputer.interactionOutcome.kind;
@@ -856,16 +942,6 @@ export async function simulateEditingScenario(
 			}
 		}
 	} finally {
-		// Save final history if requested
-		if (saveHistoryOptions) {
-			const trajectoryData: ITrajectoryData = {
-				instance_id: saveHistoryOptions.instanceId,
-				description: saveHistoryOptions.description || `Generated trajectory for ${saveHistoryOptions.instanceId}`,
-				history: serializeHistoryForSaving(history)
-			};
-			await testRuntime.writeFile(`history-${saveHistoryOptions.instanceId}.txt`, JSON.stringify(trajectoryData, undefined, 2), INLINE_HISTORY_TAG);
-		}
-		
 		await teardownSimulationWorkspace(accessor, workspace);
 		await testRuntime.writeFile('inline-simulator.txt', JSON.stringify(states, undefined, 2), INLINE_STATE_TAG); // TODO@test: using .txt instead of .json to avoid breaking test scripts
 	}

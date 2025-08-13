@@ -518,6 +518,7 @@ export interface ISimulationTestRuntime extends ILogTarget, ISimulationTestConte
 	log(message: string, err?: any): void;
 	flushLogs(): Promise<void>;
 	writeFile(filename: string, contents: Uint8Array | string, tag: string): Promise<string>;
+	readFile(filename: string, tag: string): Promise<string>;
 	getWrittenFiles(): IWrittenFile[];
 	getOutcome(): SimulationTestOutcome | undefined;
 	setOutcome(outcome: SimulationTestOutcome): void;
@@ -582,6 +583,11 @@ export class SimulationTestRuntime implements ISimulationTestRuntime {
 		await fs.promises.mkdir(path.dirname(dest), { recursive: true });
 		await fs.promises.writeFile(dest, contents);
 		return relativePath;
+	}
+
+	public async readFile(filename: string, tag: string): Promise<string> {
+		const filePath = path.join(this.testOutcomeDir, this.massageFilename(filename));
+		return await fs.promises.readFile(filePath, 'utf8');
 	}
 
 	protected massageFilename(filename: string): string {

@@ -187,9 +187,10 @@ export class ExternalSimulationTestRuntime extends SimulationTestRuntime {
 	constructor(
 		baseDir: string,
 		testOutcomeDir: string,
+		resourceDirectory: string,
 		runNumber: number
 	) {
-		super(baseDir, testOutcomeDir, runNumber);
+		super(baseDir, testOutcomeDir, resourceDirectory, runNumber);
 	}
 
 	override async writeFile(filename: string, contents: Uint8Array | string, tag: string): Promise<string> {

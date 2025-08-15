@@ -89,6 +89,8 @@ export class SimulationOptions {
 
 	public readonly modelConfigFile: string | undefined;
 
+	public readonly resourceDirectory: string | undefined;
+
 	protected constructor(processArgv: readonly string[]) {
 		const argv = minimist(processArgv.slice(2));
 		this.argv = argv;
@@ -162,6 +164,7 @@ export class SimulationOptions {
 
 		this.configFile = argv['config-file'];
 		this.modelConfigFile = argv['model-config-file'];
+		this.resourceDirectory = argv['resource-directory'];
 	}
 
 	public printHelp(): void {
@@ -216,6 +219,7 @@ export class SimulationOptions {
 			`  --nes-unified-model                Use the unified model for NES`,
 			`  --config-file                      Path to a JSON file containing configuration options`,
 			`  --model-config-file                Path to a JSON file containing model configuration options`,
+			`  --resource-directory                Path to the directory containing test resources. Defaults to the testOutcomeDir/.resources if not specified`,
 			``,
 		].join('\n'));
 	}

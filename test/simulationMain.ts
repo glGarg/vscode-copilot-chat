@@ -600,6 +600,7 @@ function createSimulationTestContext(
 		outputPath,
 		externalScenariosPath,
 		modelConfig,
+		resourceDirectory: opts.resourceDirectory,
 		simulationServicesOptions,
 		simulationOutcome,
 		simulationEndpointHealth,

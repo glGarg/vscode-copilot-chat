@@ -95,6 +95,7 @@ export interface SimulationTestContext {
 	outputPath: string;
 	externalScenariosPath?: string;
 	modelConfig: ISimulationModelConfig;
+	resourceDirectory: string | undefined;
 	simulationEndpointHealth: ISimulationEndpointHealth;
 	simulationServicesOptions: SimulationServicesOptions;
 	simulationOutcome: ISimulationOutcome;
@@ -406,10 +407,10 @@ export const executeTestOnce = async (
 		const fastRewriteModel = (opts.fastRewriteModel ?? opts.chatModel) ?? test.model;
 		testingServiceCollection.define(IEndpointProvider, new SyncDescriptor(TestEndpointProvider, [smartChatModel, fastChatModel, fastRewriteModel, currentTestRunInfo, opts.modelCacheMode === CacheMode.Disable, undefined]));
 	}
-
+	const resourceDirectory = ctx.resourceDirectory ?? path.join(outcomeDirectory, 'resources');
 	const simulationTestRuntime = (ctx.externalScenariosPath !== undefined)
-		? new ExternalSimulationTestRuntime(ctx.outputPath, outcomeDirectory, runNumber)
-		: new SimulationTestRuntime(ctx.outputPath, outcomeDirectory, runNumber);
+		? new ExternalSimulationTestRuntime(ctx.outputPath, outcomeDirectory, resourceDirectory, runNumber)
+		: new SimulationTestRuntime(ctx.outputPath, outcomeDirectory, resourceDirectory, runNumber);
 	testingServiceCollection.define(ISimulationTestRuntime, simulationTestRuntime);
 	testingServiceCollection.define(ISimulationTestContext, simulationTestRuntime);
 	testingServiceCollection.define(ILogService, new SyncDescriptor(LogServiceImpl, [[new ConsoleLog(`🪵 ${currentTestRunInfo.test.fullName} (Run #${currentTestRunInfo.testRunNumber + 1}):\n`), simulationTestRuntime]]));

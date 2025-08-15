@@ -61,7 +61,7 @@ export async function run(fullPath: string, testFullName: string) {
 		_serviceBrand: undefined,
 	});
 	testingServiceCollection.define(ITestProvider, new NullTestProvider());
-	testingServiceCollection.define(ISimulationTestRuntime, new SimulationTestRuntime('./', './.simulation/visualization-out', 1));
+	testingServiceCollection.define(ISimulationTestRuntime, new SimulationTestRuntime('./', './.simulation/visualization-out', './.simulation/visualization-out', 1));
 	testingServiceCollection.define(ISimulationTestContext, new NulSimulationTestContext());
 
 	try {

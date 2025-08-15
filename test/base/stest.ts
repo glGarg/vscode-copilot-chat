@@ -589,8 +589,9 @@ export class SimulationTestRuntime implements ISimulationTestRuntime {
 	}
 
 	public async writeResourceFile(filename: string, contents: Uint8Array | string, tag: string): Promise<string> {
+		const dirName = path.basename(path.dirname(this.testOutcomeDir));
 		const dest =
-			path.join(this.resourceDirectory, this.massageFilename(filename));
+			path.join(this.resourceDirectory, dirName, this.massageFilename(filename));
 
 		const relativePath = path.relative(this.baseDir, dest);
 		this.writtenFiles.push({

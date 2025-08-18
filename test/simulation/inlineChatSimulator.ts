@@ -76,7 +76,7 @@ export interface ITrajectoryCollection {
 	[instance_id: string]: ITrajectoryData;
 }
 
-export function loadTurnIndexedTrajectory(baseDir: string, instanceId: string, maxTurns: number = 50): ITrajectoryData | undefined {
+export async function loadTurnIndexedTrajectory(testRuntime: ISimulationTestRuntime, baseDir: string, instanceId: string, maxTurns: number = 50): Promise<ITrajectoryData | undefined> {
 	const history: ITrajectoryTurn[] = [];
 
 	// Try to load turn files in order
@@ -86,7 +86,7 @@ export function loadTurnIndexedTrajectory(baseDir: string, instanceId: string, m
 
 		try {
 			if (fs.existsSync(turnFilePath)) {
-				const turnData = fs.readFileSync(turnFilePath, 'utf8');
+				const turnData = await testRuntime.readResourceFile(turnFilePath);
 				const parsedTurn = JSON.parse(turnData);
 
 				// Verify this is the turn we expect and for the right instance
@@ -173,6 +173,7 @@ export async function simulateInlineChatWithTrajectory(
 }
 
 export async function simulateInlineChatWithTurnIndexedTrajectory(
+	testRuntime: ISimulationTestRuntime,
 	testingServiceCollection: TestingServiceCollection,
 	scenario: IScenario,
 	baseDir: string,
@@ -180,7 +181,7 @@ export async function simulateInlineChatWithTurnIndexedTrajectory(
 	strategy: EditTestStrategy = EditTestStrategy.Inline,
 	maxTurns: number = 50
 ): Promise<void> {
-	const trajectoryData = loadTurnIndexedTrajectory(baseDir, instanceId, maxTurns);
+	const trajectoryData = await loadTurnIndexedTrajectory(testRuntime, baseDir, instanceId, maxTurns);
 	if (!trajectoryData) {
 		throw new Error(`Turn-indexed trajectory for instance_id '${instanceId}' not found in ${baseDir}`);
 	}
@@ -733,7 +734,7 @@ export async function simulateEditingScenario(
 					//description: saveHistoryOptions.description,
 					turns: serializeHistoryForSaving(history) // This will be just the current 2 turns
 				};
-				await testRuntime.writeFile(`history-turn-${turnIndex.toString()}.txt`, JSON.stringify(turnData, undefined, 2), INLINE_HISTORY_TAG);
+				await testRuntime.writeResourceFile(`history-turn-${turnIndex.toString()}.txt`, JSON.stringify(turnData, undefined, 2), INLINE_HISTORY_TAG);
 			}
 			let annotations = await responseProcessor?.postProcess(accessor, workspace, stream, result) ?? [];
 

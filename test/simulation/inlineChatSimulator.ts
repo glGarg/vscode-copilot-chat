@@ -115,37 +115,6 @@ export async function loadTurnIndexedTrajectory(testRuntime: ISimulationTestRunt
 	};
 }
 
-export function convertTrajectoryToHistory(trajectory: ITrajectoryData): (ChatRequestTurn | ChatResponseTurn)[] {
-	const history: (ChatRequestTurn | ChatResponseTurn)[] = [];
-
-	for (const turn of trajectory.history) {
-		if (turn.type === 'request') {
-			history.push(new ChatRequestTurn(
-				turn.prompt || '',
-				turn.command,
-				turn.references || [],
-				turn.participant || '',
-				turn.toolReferences || []
-			));
-		} else if (turn.type === 'response') {
-			const responseParts = (turn.response || []).map(part => {
-				if (part.type === 'markdown') {
-					return new ChatResponseMarkdownPart(part.value);
-				}
-				return part;
-			});
-			history.push(new ChatResponseTurn(
-				responseParts,
-				turn.result || { metadata: {} },
-				turn.participant || '',
-				turn.command
-			));
-		}
-	}
-
-	return history;
-}
-
 // Legacy functions for backward compatibility
 export function loadTrajectories(trajectoryFilePath: string): ITrajectoryCollection {
 	const trajectoryData = fs.readFileSync(trajectoryFilePath, 'utf8');
@@ -272,7 +241,11 @@ export function serializeHistoryForSaving(history: (ChatRequestTurn | ChatRespon
 					}
 					return part;
 				}),
-				result: turn.result,
+				// Always include metadata, default to empty object if missing
+				result: {
+					...turn.result,
+					metadata: (turn.result && typeof turn.result === 'object' && 'metadata' in turn.result) ? turn.result.metadata : {}
+				},
 				participant: turn.participant,
 				command: turn.command
 			};
@@ -414,6 +387,48 @@ export interface EditingSimulationHost {
 	provideResponseProcessor?: (query: IScenarioQuery) => EditingSimulationHostResponseProcessor;
 }
 
+export function loadSerializedHistoryFromFile(filePath: string): ITrajectoryTurn[] {
+	const json = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+	return json.turns;
+}
+
+export function convertTrajectoryToHistory(trajectory: ITrajectoryTurn[]): (ChatRequestTurn | ChatResponseTurn)[] {
+	const history: (ChatRequestTurn | ChatResponseTurn)[] = [];
+
+	for (const turn of trajectory) {
+		if (turn.type === 'request') {
+			history.push(new ChatRequestTurn(
+				turn.prompt || '',
+				turn.command,
+				turn.references || [],
+				turn.participant || '',
+				turn.toolReferences || []
+			));
+		} else if (turn.type === 'response') {
+			// Require metadata to be present and valid
+			if (!turn.result || typeof turn.result !== 'object' || !('metadata' in turn.result) || typeof turn.result.metadata !== 'object') {
+				throw new Error(`Malformed response turn: missing or invalid 'metadata' field in result. Turn: ${JSON.stringify(turn)}`);
+			}
+			const responseParts = (turn.response || []).map(part => {
+				if (part.type === 'markdown') {
+					return new ChatResponseMarkdownPart(part.value);
+				}
+				return part;
+			});
+			history.push(new ChatResponseTurn(
+				responseParts,
+				{
+					...turn.result,
+					metadata: turn.result.metadata
+				},
+				turn.participant || '',
+				turn.command
+			));
+		}
+	}
+
+	return history;
+}
 
 export async function simulateEditingScenario(
 	testingServiceCollection: TestingServiceCollection,
@@ -438,8 +453,8 @@ export async function simulateEditingScenario(
 	let range: Range | undefined;
 	let isFirst = true;
 	// Determine the current turn index by checking existing files
-	const turnIndex = await getNextTurnIndex(testRuntime);
-	const history: (ChatRequestTurn | ChatResponseTurn)[] = trajectoryData ? convertTrajectoryToHistory(trajectoryData) : [];
+	const turnIndex = 0;
+	const history: (ChatRequestTurn | ChatResponseTurn)[] = [];
 	/**
 	 * A map from doc to relative path with initial contents which is populated right before modifying a document.
 	 */
@@ -721,21 +736,29 @@ export async function simulateEditingScenario(
 				intentId: request.command
 			};
 
-			const requestHandler = instaService.createInstance(ChatParticipantRequestHandler, history, request, stream, CancellationToken.None, agentArgs, Event.None);
+			const save = true;
+
+			// LOAD HISTORY
+			var hist: (ChatRequestTurn | ChatResponseTurn)[] = history
+			if (!save) {
+				const data = loadSerializedHistoryFromFile('/history/hist.json');
+				hist = convertTrajectoryToHistory(data);
+				await testRuntime.writeResourceFile(`loaded-history-turn-${turnIndex.toString()}.txt`, JSON.stringify(serializeHistoryForSaving(hist), undefined, 2), INLINE_HISTORY_TAG);
+			}
+
+			const requestHandler = instaService.createInstance(ChatParticipantRequestHandler, hist, request, stream, CancellationToken.None, agentArgs, Event.None);
 			const result = await requestHandler.getResult();
 			history.push(new ChatRequestTurn(request.prompt, request.command, [...request.references], '', []));
 			history.push(new ChatResponseTurn([new ChatResponseMarkdownPart(markdownChunks.join(''))], result, ''));
 
-			// Save this turn if we have save options and haven't exceeded turn 50
-			if (turnIndex < 50) {
+			// SAVE HISTORY
+			if (save) {
 				const turnData = {
-					turnIndex,
-					//instanceId: saveHistoryOptions.instanceId,
-					//description: saveHistoryOptions.description,
-					turns: serializeHistoryForSaving(history) // This will be just the current 2 turns
+					turns: serializeHistoryForSaving(history)
 				};
 				await testRuntime.writeResourceFile(`history-turn-${turnIndex.toString()}.txt`, JSON.stringify(turnData, undefined, 2), INLINE_HISTORY_TAG);
 			}
+
 			let annotations = await responseProcessor?.postProcess(accessor, workspace, stream, result) ?? [];
 
 			let interactionOutcomeKind = interactionOutcomeComputer.interactionOutcome.kind;

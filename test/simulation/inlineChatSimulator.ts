@@ -8,7 +8,11 @@ import * as path from 'path';
 import type * as vscode from 'vscode';
 import { Intent } from '../../src/extension/common/constants';
 import { CopilotInteractiveEditorResponse, InteractionOutcome, InteractionOutcomeComputer } from '../../src/extension/inlineChat/node/promptCraftingTypes';
-import { ICopilotChatResult } from '../../src/extension/prompt/common/conversation';
+import { ICopilotChatResult, ICopilotChatResultIn, IResultMetadata } from '../../src/extension/prompt/common/conversation';
+import { IToolCallRound } from '../../src/extension/prompt/common/intents';
+import { cloneAndChange } from '../../src/util/vs/base/common/objects';
+import { MarshalledId } from '../../src/util/vs/base/common/marshallingIds';
+import { ToolCallRound } from '../../src/extension/prompt/common/toolCallRound';
 import { ChatParticipantRequestHandler, IChatAgentArgs } from '../../src/extension/prompt/node/chatParticipantRequestHandler';
 import { guessFileIndentInfo } from '../../src/extension/prompt/node/indentationGuesser';
 import { IntentDetector } from '../../src/extension/prompt/node/intentDetector';
@@ -27,11 +31,11 @@ import { ITestingServicesAccessor, TestingServiceCollection } from '../../src/pl
 import { IFile, isNotebook, SimulationWorkspace } from '../../src/platform/test/node/simulationWorkspace';
 import { ChatResponseStreamImpl } from '../../src/util/common/chatResponseStreamImpl';
 import { getLanguage, getLanguageForResource } from '../../src/util/common/languages';
-import { ExtHostNotebookDocumentData } from '../../src/util/common/test/shims/notebookDocument';
-import { createTextDocumentData, IExtHostDocumentData } from '../../src/util/common/test/shims/textDocument';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ChatRequestTurn, ChatResponseMarkdownPart, ChatResponseTurn } from '../../src/util/common/test/shims/chatTypes';
+import { ChatRequestTurn, ChatResponseMarkdownPart, ChatResponseTurn, LanguageModelToolResult } from '../../src/util/common/test/shims/chatTypes';
+import { createTextDocumentData, IExtHostDocumentData } from '../../src/util/common/test/shims/textDocument';
+import { ExtHostNotebookDocumentData } from '../../src/util/common/test/shims/notebookDocument';
 import { CancellationToken } from '../../src/util/vs/base/common/cancellation';
 import { Event } from '../../src/util/vs/base/common/event';
 import { ResourceMap } from '../../src/util/vs/base/common/map';
@@ -40,7 +44,7 @@ import { commonPrefixLength, commonSuffixLength } from '../../src/util/vs/base/c
 import { URI } from '../../src/util/vs/base/common/uri';
 import { SyncDescriptor } from '../../src/util/vs/platform/instantiation/common/descriptors';
 import { IInstantiationService } from '../../src/util/vs/platform/instantiation/common/instantiation';
-import { ChatLocation, ChatRequest, ChatRequestEditorData, ChatResponseMarkdownPart, ChatResponseNotebookEditPart, ChatResponseTextEditPart, Diagnostic, DiagnosticRelatedInformation, Location, NotebookRange, Range, Selection, TextEdit, Uri, WorkspaceEdit } from '../../src/vscodeTypes';
+import { ChatLocation, ChatRequest, ChatRequestEditorData, ChatResponseMarkdownPart, ChatResponseNotebookEditPart, ChatResponseTextEditPart, Diagnostic, DiagnosticRelatedInformation, LanguageModelPromptTsxPart, LanguageModelTextPart, LanguageModelToolResult, Location, NotebookRange, Range, Selection, TextEdit, Uri, WorkspaceEdit } from '../../src/vscodeTypes';
 import { SimulationExtHostToolsService } from '../base/extHostContext/simulationExtHostToolsService';
 import { SimulationWorkspaceExtHost } from '../base/extHostContext/simulationWorkspaceExtHost';
 import { SpyingChatMLFetcher } from '../base/spyingChatMLFetcher';
@@ -392,18 +396,44 @@ export function loadSerializedHistoryFromFile(filePath: string): ITrajectoryTurn
 	return json.turns;
 }
 
+function reviveMetadata(metadata: IResultMetadata | undefined): IResultMetadata | undefined {
+	return cloneAndChange(metadata, value => {
+		if (value.$mid === MarshalledId.LanguageModelToolResult) {
+			return new LanguageModelToolResult(cloneAndChange(value.content, reviveMetadata));
+		} else if (value.$mid === MarshalledId.LanguageModelTextPart) {
+			return new LanguageModelTextPart(value.value);
+		} else if (value.$mid === MarshalledId.LanguageModelPromptTsxPart) {
+			return new LanguageModelPromptTsxPart(value.value);
+		} else {
+
+		}
+		//else if (value.$mid === MarshalledId.LanguageModelThinkingPart) {
+		//return new types.LanguageModelThinkingPart(value.value, value.id, value.metadata);
+		//}
+
+
+		return undefined;
+	});
+}
+function reviveToolCallResults(result: ICopilotChatResultIn): Record<string, LanguageModelToolResult> | undefined {
+	// iterate over toolCallResults, which is a Record<string, LanguageModelToolResult>
+	if (!result || !result.metadata || !result.metadata.toolCallResults) {
+		return undefined;
+	}
+
+	const revivedResults: Record<string, LanguageModelToolResult> = {};
+	for (const [key, value] of Object.entries(result.metadata.toolCallResults)) {
+		revivedResults[key] = new LanguageModelToolResult(cloneAndChange(value.content, reviveMetadata));
+	}
+	return revivedResults;
+}
+
 export function convertTrajectoryToHistory(trajectory: ITrajectoryTurn[]): (ChatRequestTurn | ChatResponseTurn)[] {
 	const history: (ChatRequestTurn | ChatResponseTurn)[] = [];
 
 	for (const turn of trajectory) {
 		if (turn.type === 'request') {
-			history.push(new ChatRequestTurn(
-				turn.prompt || '',
-				turn.command,
-				turn.references || [],
-				turn.participant || '',
-				turn.toolReferences || []
-			));
+            history.push(new ChatRequestTurn(turn.prompt, turn.command, [], '', []));
 		} else if (turn.type === 'response') {
 			// Require metadata to be present and valid
 			if (!turn.result || typeof turn.result !== 'object' || !('metadata' in turn.result) || typeof turn.result.metadata !== 'object') {
@@ -736,26 +766,86 @@ export async function simulateEditingScenario(
 				intentId: request.command
 			};
 
-			const save = true;
-
-			// LOAD HISTORY
-			var hist: (ChatRequestTurn | ChatResponseTurn)[] = history
-			if (!save) {
+			const save = false;
+            
+            // LOAD HISTORY
+			let hist: (ChatRequestTurn | ChatResponseTurn)[] = history
+			/*
+            if (!save) {
 				const data = loadSerializedHistoryFromFile('/history/hist.json');
 				hist = convertTrajectoryToHistory(data);
-				await testRuntime.writeResourceFile(`loaded-history-turn-${turnIndex.toString()}.txt`, JSON.stringify(serializeHistoryForSaving(hist), undefined, 2), INLINE_HISTORY_TAG);
+                
+                history.push(new ChatRequestTurn(data[0].prompt, data[0].command, [], '', []));
+                const responseParts = (data[1].response || []).map(part => {
+                    if (part.type === 'markdown') {
+                        return new ChatResponseMarkdownPart(part.value);
+                    }
+                    return part;
+                });
+                throw Error(`responseParts: ${JSON.stringify(responseParts[0])} data[1].result: ${JSON.stringify(data[1].result)}`);
+                history.push(new ChatResponseTurn(responseParts, data[1].result, ''));
+                //throw Error(`${typeof history[0]}  ${history[0] instanceof ChatRequestTurn} ${typeof history[1]} ${history[1] instanceof ChatResponseTurn}`);
+                //throw Error(`${typeof hist[0]}  ${hist[0] instanceof ChatRequestTurn} ${typeof hist[1]} ${hist[1] instanceof ChatResponseTurn}`);
+                
+                // Make sure history was loaded correctly, re-serialize it and save it out
+				await testRuntime.writeResourceFile(`loaded-history-turn-${turnIndex.toString()}.txt`, JSON.stringify(serializeHistoryForSaving(history), undefined, 2), INLINE_HISTORY_TAG);
+			}
+            */
+            const data = loadSerializedHistoryFromFile('/history/hist.json');
+			if (!save) {
+				history.push(new ChatRequestTurn(data[0].prompt || '', data[0].command, [], '', []));
+				const responseParts = (data[1].response || []).map(part => {
+					if (part.type === 'markdown') {
+						return new ChatResponseMarkdownPart(part.value);
+					}
+					return part;
+				});
+				// Explicitly construct ICopilotChatResultIn with IResultMetadata
+				/*
+                const resultMetadata = {
+					...data[1].result?.metadata,
+					// Ensure toolCallRounds and toolCallResults are properly typed
+					toolCallRounds: Array.isArray(data[1].result?.metadata?.toolCallRounds)
+						? data[1].result.metadata.toolCallRounds.map((round: IToolCallRound) => ToolCallRound.create(round))
+						: [],
+					toolCallResults: Array.isArray(data[1].result?.metadata?.toolCallResults)
+						? data[1].result.metadata.toolCallResults.map((result: any) => new LanguageModelToolResult(result))
+						: []
+				};
+				const chatResult: ICopilotChatResultIn = {
+					...data[1].result,
+					metadata: data[1].result?.metadata
+				};
+				history.push(new ChatResponseTurn(responseParts, chatResult, ''));
+                */
+                const resultMetadata = {
+					...data[1].result?.metadata,
+					// Ensure toolCallRounds and toolCallResults are properly typed
+					toolCallRounds: Array.isArray(data[1].result?.metadata?.toolCallRounds)
+						? data[1].result.metadata.toolCallRounds.map((round: IToolCallRound) => ToolCallRound.create(round))
+						: [],
+					toolCallResults: reviveToolCallResults(data[1].result?.metadata?.toolCallResults),
+				};
+                // throw Error(`toolCallRounds: ${JSON.stringify(resultMetadata.toolCallRounds)}, toolCallResults ${JSON.stringify(resultMetadata.toolCallResults)}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n-------------------------data[1].result?.metadata?.toolCallResults: ${JSON.stringify(data[1].result?.metadata?.toolCallResults)}`);
+                const chatResult: ICopilotChatResultIn = {
+					...data[1].result,
+					metadata: resultMetadata,//data[1].result?.metadata
+				};
+                history.push(new ChatResponseTurn(responseParts, chatResult, ''));
 			}
 
-			const requestHandler = instaService.createInstance(ChatParticipantRequestHandler, hist, request, stream, CancellationToken.None, agentArgs, Event.None);
+			const requestHandler = instaService.createInstance(ChatParticipantRequestHandler, data, request, stream, CancellationToken.None, agentArgs, Event.None);
 			const result = await requestHandler.getResult();
 			history.push(new ChatRequestTurn(request.prompt, request.command, [...request.references], '', []));
 			history.push(new ChatResponseTurn([new ChatResponseMarkdownPart(markdownChunks.join(''))], result, ''));
 
 			// SAVE HISTORY
 			if (save) {
+                //throw Error(`Hiss: ${JSON.stringify(history)}`);
 				const turnData = {
 					turns: serializeHistoryForSaving(history)
 				};
+                throw Error(`------------------\n\n\n\n\n\n\n\n\nturnData: ${JSON.stringify(turnData)}\n\n\n\n\n\n\n\n\nHiss: ${JSON.stringify(history)}\n\n\n\n\n\n\n\n\n-------------------`);
 				await testRuntime.writeResourceFile(`history-turn-${turnIndex.toString()}.txt`, JSON.stringify(turnData, undefined, 2), INLINE_HISTORY_TAG);
 			}
 

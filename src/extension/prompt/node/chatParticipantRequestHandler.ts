@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
+import { ToolCallRound } from '../common/toolCallRound';
 import type { ChatRequest, ChatRequestTurn2, ChatResponseStream, ChatResult, Location } from 'vscode';
 import { IAuthenticationChatUpgradeService } from '../../../platform/authentication/common/authenticationUpgrade';
 import { getChatParticipantIdFromName, getChatParticipantNameFromId, workspaceAgentName } from '../../../platform/chat/common/chatAgents';
@@ -35,7 +36,7 @@ import { UnknownIntent } from '../../intents/node/unknownIntent';
 import { ContributedToolName } from '../../tools/common/toolNames';
 import { ChatVariablesCollection } from '../common/chatVariablesCollection';
 import { Conversation, GlobalContextMessageMetadata, ICopilotChatResult, ICopilotChatResultIn, normalizeSummariesOnRounds, RenderedUserMessageMetadata, Turn, TurnStatus } from '../common/conversation';
-import { InternalToolReference } from '../common/intents';
+import { InternalToolReference, IToolCallRound } from '../common/intents';
 import { ChatTelemetryBuilder } from './chatParticipantTelemetry';
 import { DefaultIntentRequestHandler } from './defaultIntentRequestHandler';
 import { IDocumentContext } from './documentContext';
@@ -67,7 +68,7 @@ export class ChatParticipantRequestHandler {
 	private readonly chatTelemetry: ChatTelemetryBuilder;
 
 	constructor(
-		private readonly rawHistory: ReadonlyArray<ChatRequestTurn | ChatResponseTurn>,
+		private readonly rawHistory: any,//(ChatRequestTurn | ChatResponseTurn)[],
 		private request: ChatRequest,
 		stream: ChatResponseStream,
 		private readonly token: CancellationToken,
@@ -105,9 +106,37 @@ export class ChatParticipantRequestHandler {
 			});
 		}
 
-		const { turns, sessionId } = _instantiationService.invokeFunction(accessor => addHistoryToConversation(accessor, rawHistory));
+        let history: (ChatRequestTurn | ChatResponseTurn)[] = []
+        history.push(new ChatRequestTurn(rawHistory[0].prompt, rawHistory[0].command, [], '', []));
+        const responseParts = (rawHistory[1].response || []).map(part => {
+            if (part.type === 'markdown') {
+                return new ChatResponseMarkdownPart(part.value);
+            }
+            return part;
+        });
+        const resultMetadata = {
+            ...rawHistory[1].result?.metadata,
+            // Ensure toolCallRounds and toolCallResults are properly typed
+            toolCallRounds: Array.isArray(rawHistory[1].result?.metadata?.toolCallRounds)
+                ? rawHistory[1].result.metadata.toolCallRounds.map((round: IToolCallRound) => ToolCallRound.create(round))
+                : [],
+            toolCallResults: rawHistory[1].result?.metadata?.toolCallResults,
+        };
+        // throw Error(`toolCallRounds: ${JSON.stringify(resultMetadata.toolCallRounds)}, toolCallResults ${JSON.stringify(resultMetadata.toolCallResults)}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n-------------------------data[1].result?.metadata?.toolCallResults: ${JSON.stringify(data[1].result?.metadata?.toolCallResults)}`);
+        const chatResult: ICopilotChatResultIn = {
+            ...rawHistory[1].result,
+            metadata: resultMetadata,//data[1].result?.metadata
+        };
+        history.push(new ChatResponseTurn(responseParts, chatResult, '', ""));
+		
+        // throw Error(`responseParts: ${JSON.stringify(responseParts)}$`);
+        // throw Error(`${history[0] instanceof ChatRequestTurn} ${history[1] instanceof ChatResponseTurn}`);
+        
+        const { turns, sessionId } = _instantiationService.invokeFunction(accessor => addHistoryToConversation(accessor, history));
+		// throw Error(`turns: ${JSON.stringify(turns)}`);
 		normalizeSummariesOnRounds(turns);
-		const actualSessionId = sessionId ?? generateUuid();
+        
+        const actualSessionId = sessionId ?? generateUuid();
 
 		this.documentContext = IDocumentContext.inferDocumentContext(request, tabsAndEditorsService.activeTextEditor, turns);
 
@@ -332,7 +361,7 @@ export function addHistoryToConversation(accessor: ServicesAccessor, history: Re
 	const turns: Turn[] = [];
 	let sessionId: string | undefined;
 	let previousChatRequestTurn: ChatRequestTurn | undefined;
-
+    let indx = 0;
 	for (const entry of history) {
 		// The extension API model technically supports arbitrary requests/responses not in pairs, but this isn't used anywhere,
 		// so we can just fit this to our Conversation model for now.
@@ -345,16 +374,20 @@ export function addHistoryToConversation(accessor: ServicesAccessor, history: Re
 			} else {
 				if (previousChatRequestTurn) {
 					const deserializedTurn = createTurnFromVSCodeChatHistoryTurns(previousChatRequestTurn, entry, commandService, workspaceService);
+                    // throw Error(`${indx} deserializedTurn: ${JSON.stringify(deserializedTurn)}`);
 					previousChatRequestTurn = undefined;
 					turns.push(deserializedTurn);
 				}
 			}
 
-			const copilotResult = entry.result as ICopilotChatResultIn;
+            // throw Error(`Index: ${indx} --- Type: ${typeof entry} --- Value: ${JSON.stringify(entry)}`);
+			const copilotResult: ICopilotChatResultIn = entry.result as ICopilotChatResultIn; // { metadata: entry.result.metadata };
+            // throw Error(`${indx} Res: ${JSON.stringify(copilotResult)}`);
 			if (typeof copilotResult.metadata?.sessionId === 'string') {
 				sessionId = copilotResult.metadata.sessionId;
 			}
 		}
+        indx += 1;
 	}
 
 	return { turns, sessionId };
@@ -405,7 +438,7 @@ function createTurnFromVSCodeChatHistoryTurns(
 		} else if (r instanceof ChatResponseAnchorPart) {
 			return anchorPartToMarkdown(workspaceService, r);
 		} else {
-			return null;
+			return '';
 		}
 	}).filter(Boolean).join('');
 	const intentId = chatResponseTurn.command || getChatParticipantNameFromId(chatResponseTurn.participant);
@@ -426,7 +459,9 @@ function createTurnFromVSCodeChatHistoryTurns(
 	}
 
 	currentTurn.setResponse(status, { message: content, type: 'model', name: command?.commandId || UnknownIntent.ID }, undefined, chatResponseTurn.result);
+    // throw Error(`content: ${JSON.stringify(content)}, chatResponseTurn.result: ${JSON.stringify(chatResponseTurn.result)}`);
 	const turnMetadata = (chatResponseTurn.result as ICopilotChatResultIn).metadata;
+	// throw Error(`content: ${JSON.stringify(content)}, chatResponseTurn.result: ${JSON.stringify(chatResponseTurn.result)}\n\n\n\n\n\n\n\n\n\n---------------------------------------------------------------------------------------turnMetadata: ${JSON.stringify(turnMetadata)}`);
 	if (turnMetadata?.renderedGlobalContext) {
 		currentTurn.setMetadata(new GlobalContextMessageMetadata(turnMetadata?.renderedGlobalContext));
 	}

@@ -53,6 +53,7 @@ export interface AgentPromptProps extends GenericBasePromptElementProps {
 	readonly location: ChatLocation;
 
 	readonly triggerSummarize?: boolean;
+	isFirstTurn?: boolean; // We always want to summarize everything coming in on the first turn.
 
 	/**
 	 * Enables cache breakpoints and summarization
@@ -79,6 +80,7 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 		@IExperimentationService private readonly experimentationService: IExperimentationService,
 		@IPromptEndpoint private readonly promptEndpoint: IPromptEndpoint,
 	) {
+		props.isFirstTurn = true;
 		super(props);
 	}
 
@@ -112,13 +114,18 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 		</>;
 
 		const maxToolResultLength = Math.floor(this.promptEndpoint.modelMaxPromptTokens * MAX_TOOL_RESPONSE_PCT);
-
-		if (this.props.enableCacheBreakpoints) {
+        let shouldSummarize = this.props.triggerSummarize || this.props.isFirstTurn;
+		if (!this.props.isFirstTurn)
+        {
+            shouldSummarize = this.props.triggerSummarize;
+        }
+		this.props.isFirstTurn = false;
+        if (this.props.enableCacheBreakpoints) {
 			return <>
 				{baseInstructions}
 				<SummarizedConversationHistory
 					flexGrow={1}
-					triggerSummarize={this.props.triggerSummarize}
+					triggerSummarize={shouldSummarize}//{this.props.triggerSummarize}//{shouldSummarize}
 					priority={900}
 					promptContext={this.props.promptContext}
 					location={this.props.location}

@@ -106,7 +106,8 @@ export class ChatParticipantRequestHandler {
 			});
 		}
 
-        let history: (ChatRequestTurn | ChatResponseTurn)[] = []
+        //let history: (ChatRequestTurn | ChatResponseTurn)[] = []
+        /*
         history.push(new ChatRequestTurn(rawHistory[0].prompt, rawHistory[0].command, [], '', []));
         const responseParts = (rawHistory[1].response || []).map(part => {
             if (part.type === 'markdown') {
@@ -127,12 +128,9 @@ export class ChatParticipantRequestHandler {
             metadata: resultMetadata,//data[1].result?.metadata
         };
         history.push(new ChatResponseTurn(responseParts, chatResult, '', ""));
-		
-        // throw Error(`responseParts: ${JSON.stringify(responseParts)}$`);
-        // throw Error(`${history[0] instanceof ChatRequestTurn} ${history[1] instanceof ChatResponseTurn}`);
+		*/
         
-        const { turns, sessionId } = _instantiationService.invokeFunction(accessor => addHistoryToConversation(accessor, history));
-		// throw Error(`turns: ${JSON.stringify(turns)}`);
+        const { turns, sessionId } = _instantiationService.invokeFunction(accessor => addHistoryToConversation(accessor, rawHistory));
 		normalizeSummariesOnRounds(turns);
         
         const actualSessionId = sessionId ?? generateUuid();

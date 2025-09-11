@@ -764,31 +764,10 @@ export async function simulateEditingScenario(
 				intentId: request.command
 			};
 
-			const save = false;
+			const save = true;
             
             // LOAD HISTORY
 			let hist: (ChatRequestTurn | ChatResponseTurn)[] = history
-			/*
-            if (!save) {
-				const data = loadSerializedHistoryFromFile('/history/hist.json');
-				hist = convertTrajectoryToHistory(data);
-                
-                history.push(new ChatRequestTurn(data[0].prompt, data[0].command, [], '', []));
-                const responseParts = (data[1].response || []).map(part => {
-                    if (part.type === 'markdown') {
-                        return new ChatResponseMarkdownPart(part.value);
-                    }
-                    return part;
-                });
-                throw Error(`responseParts: ${JSON.stringify(responseParts[0])} data[1].result: ${JSON.stringify(data[1].result)}`);
-                history.push(new ChatResponseTurn(responseParts, data[1].result, ''));
-                //throw Error(`${typeof history[0]}  ${history[0] instanceof ChatRequestTurn} ${typeof history[1]} ${history[1] instanceof ChatResponseTurn}`);
-                //throw Error(`${typeof hist[0]}  ${hist[0] instanceof ChatRequestTurn} ${typeof hist[1]} ${hist[1] instanceof ChatResponseTurn}`);
-                
-                // Make sure history was loaded correctly, re-serialize it and save it out
-				await testRuntime.writeResourceFile(`loaded-history-turn-${turnIndex.toString()}.txt`, JSON.stringify(serializeHistoryForSaving(history), undefined, 2), INLINE_HISTORY_TAG);
-			}
-            */
             if (!save) {
 				const data = loadSerializedHistoryFromFile('/history/hist.json');
     			history.push(new ChatRequestTurn(data[0].prompt || '', data[0].command, [], '', []));
@@ -798,24 +777,6 @@ export async function simulateEditingScenario(
 					}
 					return part;
 				});
-				// Explicitly construct ICopilotChatResultIn with IResultMetadata
-				/*
-                const resultMetadata = {
-					...data[1].result?.metadata,
-					// Ensure toolCallRounds and toolCallResults are properly typed
-					toolCallRounds: Array.isArray(data[1].result?.metadata?.toolCallRounds)
-						? data[1].result.metadata.toolCallRounds.map((round: IToolCallRound) => ToolCallRound.create(round))
-						: [],
-					toolCallResults: Array.isArray(data[1].result?.metadata?.toolCallResults)
-						? data[1].result.metadata.toolCallResults.map((result: any) => new LanguageModelToolResult(result))
-						: []
-				};
-				const chatResult: ICopilotChatResultIn = {
-					...data[1].result,
-					metadata: data[1].result?.metadata
-				};
-				history.push(new ChatResponseTurn(responseParts, chatResult, ''));
-                */
                 const resultMetadata = {
 					...data[1].result?.metadata,
 					// Ensure toolCallRounds and toolCallResults are properly typed
@@ -824,10 +785,9 @@ export async function simulateEditingScenario(
 						: [],
 					toolCallResults: reviveToolCallResults(data[1].result?.metadata?.toolCallResults),
 				};
-                //throw Error(`toolCallResults ${JSON.stringify(resultMetadata.toolCallResults)}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n-------------------------data[1].result?.metadata?.toolCallResults: ${JSON.stringify(data[1].result?.metadata?.toolCallResults)}`);
                 const chatResult: ICopilotChatResultIn = {
 					...data[1].result,
-					metadata: resultMetadata,//data[1].result?.metadata
+					metadata: resultMetadata,
 				};
                 history.push(new ChatResponseTurn(responseParts, chatResult, ''));
 			}
@@ -843,8 +803,7 @@ export async function simulateEditingScenario(
 
 			// SAVE HISTORY
 			if (save) {
-                //throw Error(`Hiss: ${JSON.stringify(history)}`);
-				const turnData = {
+                const turnData = {
 					turns: serializeHistoryForSaving(history)
 				};
 				await testRuntime.writeResourceFile(`history-turn-${turnIndex.toString()}.txt`, JSON.stringify(turnData, undefined, 2), INLINE_HISTORY_TAG);

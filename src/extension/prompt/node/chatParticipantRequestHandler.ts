@@ -122,7 +122,6 @@ export class ChatParticipantRequestHandler {
                 : [],
             toolCallResults: rawHistory[1].result?.metadata?.toolCallResults,
         };
-        // throw Error(`toolCallRounds: ${JSON.stringify(resultMetadata.toolCallRounds)}, toolCallResults ${JSON.stringify(resultMetadata.toolCallResults)}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n-------------------------data[1].result?.metadata?.toolCallResults: ${JSON.stringify(data[1].result?.metadata?.toolCallResults)}`);
         const chatResult: ICopilotChatResultIn = {
             ...rawHistory[1].result,
             metadata: resultMetadata,//data[1].result?.metadata

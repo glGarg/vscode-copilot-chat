@@ -415,15 +415,13 @@ function reviveMetadata(metadata: IResultMetadata | undefined): IResultMetadata 
 		return undefined;
 	});
 }
-function reviveToolCallResults(result: ICopilotChatResultIn): Record<string, LanguageModelToolResult> | undefined {
-	// iterate over toolCallResults, which is a Record<string, LanguageModelToolResult>
-	if (!result || !result.metadata || !result.metadata.toolCallResults) {
-		return undefined;
-	}
-
+function reviveToolCallResults(toolCallResults: any): Record<string, LanguageModelToolResult> | undefined {
+	// iterate over toolCallResults, which is a Record<string, LanguageModelToolResult.
 	const revivedResults: Record<string, LanguageModelToolResult> = {};
-	for (const [key, value] of Object.entries(result.metadata.toolCallResults)) {
-		revivedResults[key] = new LanguageModelToolResult(cloneAndChange(value.content, reviveMetadata));
+	for (const [key, value] of Object.entries(toolCallResults)) {
+		if (value && typeof value === 'object' && 'content' in value) {
+			revivedResults[key] = new LanguageModelToolResult(cloneAndChange((value as { content: any }).content, reviveMetadata));
+		}
 	}
 	return revivedResults;
 }
@@ -791,9 +789,9 @@ export async function simulateEditingScenario(
 				await testRuntime.writeResourceFile(`loaded-history-turn-${turnIndex.toString()}.txt`, JSON.stringify(serializeHistoryForSaving(history), undefined, 2), INLINE_HISTORY_TAG);
 			}
             */
-            const data = loadSerializedHistoryFromFile('/history/hist.json');
-			if (!save) {
-				history.push(new ChatRequestTurn(data[0].prompt || '', data[0].command, [], '', []));
+            if (!save) {
+				const data = loadSerializedHistoryFromFile('/history/hist.json');
+    			history.push(new ChatRequestTurn(data[0].prompt || '', data[0].command, [], '', []));
 				const responseParts = (data[1].response || []).map(part => {
 					if (part.type === 'markdown') {
 						return new ChatResponseMarkdownPart(part.value);
@@ -826,7 +824,7 @@ export async function simulateEditingScenario(
 						: [],
 					toolCallResults: reviveToolCallResults(data[1].result?.metadata?.toolCallResults),
 				};
-                // throw Error(`toolCallRounds: ${JSON.stringify(resultMetadata.toolCallRounds)}, toolCallResults ${JSON.stringify(resultMetadata.toolCallResults)}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n-------------------------data[1].result?.metadata?.toolCallResults: ${JSON.stringify(data[1].result?.metadata?.toolCallResults)}`);
+                //throw Error(`toolCallResults ${JSON.stringify(resultMetadata.toolCallResults)}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n-------------------------data[1].result?.metadata?.toolCallResults: ${JSON.stringify(data[1].result?.metadata?.toolCallResults)}`);
                 const chatResult: ICopilotChatResultIn = {
 					...data[1].result,
 					metadata: resultMetadata,//data[1].result?.metadata
@@ -834,7 +832,11 @@ export async function simulateEditingScenario(
                 history.push(new ChatResponseTurn(responseParts, chatResult, ''));
 			}
 
-			const requestHandler = instaService.createInstance(ChatParticipantRequestHandler, data, request, stream, CancellationToken.None, agentArgs, Event.None);
+            const loadedTurnData = {
+                turns: serializeHistoryForSaving(history)
+            };
+            await testRuntime.writeResourceFile(`loaded-history-turn-${turnIndex.toString()}.txt`, JSON.stringify(loadedTurnData, undefined, 2), INLINE_HISTORY_TAG);
+			const requestHandler = instaService.createInstance(ChatParticipantRequestHandler, history, request, stream, CancellationToken.None, agentArgs, Event.None);
 			const result = await requestHandler.getResult();
 			history.push(new ChatRequestTurn(request.prompt, request.command, [...request.references], '', []));
 			history.push(new ChatResponseTurn([new ChatResponseMarkdownPart(markdownChunks.join(''))], result, ''));
@@ -845,7 +847,6 @@ export async function simulateEditingScenario(
 				const turnData = {
 					turns: serializeHistoryForSaving(history)
 				};
-                throw Error(`------------------\n\n\n\n\n\n\n\n\nturnData: ${JSON.stringify(turnData)}\n\n\n\n\n\n\n\n\nHiss: ${JSON.stringify(history)}\n\n\n\n\n\n\n\n\n-------------------`);
 				await testRuntime.writeResourceFile(`history-turn-${turnIndex.toString()}.txt`, JSON.stringify(turnData, undefined, 2), INLINE_HISTORY_TAG);
 			}
 

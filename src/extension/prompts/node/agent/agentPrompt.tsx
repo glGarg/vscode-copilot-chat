@@ -125,7 +125,7 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 				{baseInstructions}
 				<SummarizedConversationHistory
 					flexGrow={1}
-					triggerSummarize={shouldSummarize}//{this.props.triggerSummarize}//{shouldSummarize}
+					triggerSummarize={shouldSummarize}
 					priority={900}
 					promptContext={this.props.promptContext}
 					location={this.props.location}

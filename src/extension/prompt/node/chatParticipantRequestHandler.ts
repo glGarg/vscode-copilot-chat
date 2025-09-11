@@ -68,7 +68,7 @@ export class ChatParticipantRequestHandler {
 	private readonly chatTelemetry: ChatTelemetryBuilder;
 
 	constructor(
-		private readonly rawHistory: any,//(ChatRequestTurn | ChatResponseTurn)[],
+		private readonly rawHistory: any,
 		private request: ChatRequest,
 		stream: ChatResponseStream,
 		private readonly token: CancellationToken,
@@ -124,15 +124,11 @@ export class ChatParticipantRequestHandler {
         };
         const chatResult: ICopilotChatResultIn = {
             ...rawHistory[1].result,
-            metadata: resultMetadata,//data[1].result?.metadata
+            metadata: resultMetadata,
         };
         history.push(new ChatResponseTurn(responseParts, chatResult, '', ""));
 		
-        // throw Error(`responseParts: ${JSON.stringify(responseParts)}$`);
-        // throw Error(`${history[0] instanceof ChatRequestTurn} ${history[1] instanceof ChatResponseTurn}`);
-        
         const { turns, sessionId } = _instantiationService.invokeFunction(accessor => addHistoryToConversation(accessor, history));
-		// throw Error(`turns: ${JSON.stringify(turns)}`);
 		normalizeSummariesOnRounds(turns);
         
         const actualSessionId = sessionId ?? generateUuid();
@@ -373,16 +369,13 @@ export function addHistoryToConversation(accessor: ServicesAccessor, history: Re
 			} else {
 				if (previousChatRequestTurn) {
 					const deserializedTurn = createTurnFromVSCodeChatHistoryTurns(previousChatRequestTurn, entry, commandService, workspaceService);
-                    // throw Error(`${indx} deserializedTurn: ${JSON.stringify(deserializedTurn)}`);
-					previousChatRequestTurn = undefined;
+                    previousChatRequestTurn = undefined;
 					turns.push(deserializedTurn);
 				}
 			}
 
-            // throw Error(`Index: ${indx} --- Type: ${typeof entry} --- Value: ${JSON.stringify(entry)}`);
-			const copilotResult: ICopilotChatResultIn = entry.result as ICopilotChatResultIn; // { metadata: entry.result.metadata };
-            // throw Error(`${indx} Res: ${JSON.stringify(copilotResult)}`);
-			if (typeof copilotResult.metadata?.sessionId === 'string') {
+            const copilotResult: ICopilotChatResultIn = entry.result as ICopilotChatResultIn; // { metadata: entry.result.metadata };
+            if (typeof copilotResult.metadata?.sessionId === 'string') {
 				sessionId = copilotResult.metadata.sessionId;
 			}
 		}
@@ -458,9 +451,7 @@ function createTurnFromVSCodeChatHistoryTurns(
 	}
 
 	currentTurn.setResponse(status, { message: content, type: 'model', name: command?.commandId || UnknownIntent.ID }, undefined, chatResponseTurn.result);
-    // throw Error(`content: ${JSON.stringify(content)}, chatResponseTurn.result: ${JSON.stringify(chatResponseTurn.result)}`);
-	const turnMetadata = (chatResponseTurn.result as ICopilotChatResultIn).metadata;
-	// throw Error(`content: ${JSON.stringify(content)}, chatResponseTurn.result: ${JSON.stringify(chatResponseTurn.result)}\n\n\n\n\n\n\n\n\n\n---------------------------------------------------------------------------------------turnMetadata: ${JSON.stringify(turnMetadata)}`);
+    const turnMetadata = (chatResponseTurn.result as ICopilotChatResultIn).metadata;
 	if (turnMetadata?.renderedGlobalContext) {
 		currentTurn.setMetadata(new GlobalContextMessageMetadata(turnMetadata?.renderedGlobalContext));
 	}

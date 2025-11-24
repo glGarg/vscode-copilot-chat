@@ -23,6 +23,7 @@ import { GroqBYOKLMProvider } from './groqProvider';
 import { OllamaLMProvider } from './ollamaProvider';
 import { OAIBYOKLMProvider } from './openAIProvider';
 import { OpenRouterLMProvider } from './openRouterProvider';
+import { SGLangBYOKModelProvider } from './sglangProvider';
 import { XAIBYOKLMProvider } from './xAIProvider';
 
 export class BYOKContrib extends Disposable implements IExtensionContribution {
@@ -44,8 +45,8 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 		this._register(commands.registerCommand('github.copilot.chat.manageBYOK', async (vendor: string) => {
 			const provider = this._providers.get(vendor);
 
-			// Show quick pick for Azure and CustomOAI providers
-			if (provider && (vendor === AzureBYOKModelProvider.providerName.toLowerCase() || vendor === CustomOAIBYOKModelProvider.providerName.toLowerCase())) {
+			// Show quick pick for Azure, CustomOAI and SGLang providers
+			if (provider && (vendor === AzureBYOKModelProvider.providerName.toLowerCase() || vendor === CustomOAIBYOKModelProvider.providerName.toLowerCase() || vendor === SGLangBYOKModelProvider.providerName.toLowerCase())) {
 				const configurator = new CustomOAIModelConfigurator(this._configurationService, vendor, provider);
 				await configurator.configureModelOrUpdateAPIKey();
 			} else if (provider) {
@@ -95,6 +96,7 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 			this._providers.set(OpenRouterLMProvider.providerName.toLowerCase(), instantiationService.createInstance(OpenRouterLMProvider, this._byokStorageService));
 			this._providers.set(AzureBYOKModelProvider.providerName.toLowerCase(), instantiationService.createInstance(AzureBYOKModelProvider, this._byokStorageService));
 			this._providers.set(CustomOAIBYOKModelProvider.providerName.toLowerCase(), instantiationService.createInstance(CustomOAIBYOKModelProvider, this._byokStorageService));
+			this._providers.set(SGLangBYOKModelProvider.providerName.toLowerCase(), instantiationService.createInstance(SGLangBYOKModelProvider, this._byokStorageService));
 
 			for (const [providerName, provider] of this._providers) {
 				this._store.add(lm.registerLanguageModelChatProvider(providerName, provider));

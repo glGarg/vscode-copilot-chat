@@ -115,16 +115,12 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 				body['max_completion_tokens'] = body.max_tokens;
 				delete body.max_tokens;
 			} else {
-				// For SGLang/local models: preserve max_tokens to prevent unlimited generation
-				// Calculate a reasonable max_tokens based on maxOutputTokens
-				if (body.max_tokens === undefined || body.max_tokens === null) {
-					// Use the model's maxOutputTokens configuration
-					const maxOutputTokens = this.modelMetadata.capabilities.limits.max_output_tokens;
-					if (maxOutputTokens) {
-						body.max_tokens = maxOutputTokens;
-						this.logService.info(`[SGLangEndpoint] Setting max_tokens to ${maxOutputTokens} for model ${this.modelMetadata.id}`);
-					}
-				}
+				// For SGLang/local models: ALWAYS enforce max_tokens to prevent unlimited generation
+				// Force it to maxOutputTokens regardless of what VSCode set
+				const maxOutputTokens = this.modelMetadata.capabilities.limits.max_output_tokens || 1024;
+				const originalMaxTokens = body.max_tokens;
+				body.max_tokens = maxOutputTokens;
+				this.logService.info(`[SGLangEndpoint] ENFORCING max_tokens=${maxOutputTokens} (was ${originalMaxTokens}) for model ${this.modelMetadata.id}`);
 			}
 			
 			if (!this.useResponsesApi && body.stream) {

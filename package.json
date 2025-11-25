@@ -3147,6 +3147,83 @@
 						},
 						"markdownDescription": "Configure custom OpenAI-compatible models. Each key should be a unique model ID, and the value should be an object with model configuration including name, url, toolCalling, vision, maxInputTokens, and maxOutputTokens properties."
 					},
+					"github.copilot.chat.sglangModels": {
+						"type": "object",
+						"default": {},
+						"tags": [
+							"experimental"
+						],
+						"additionalProperties": {
+							"type": "object",
+							"properties": {
+								"name": {
+									"type": "string",
+									"description": "Display name of the SGLang model"
+								},
+								"url": {
+									"type": "string",
+									"description": "URL endpoint for the SGLang/local OpenAI-compatible model"
+								},
+								"toolCalling": {
+									"type": "boolean",
+									"description": "Whether the model supports tool calling"
+								},
+								"vision": {
+									"type": "boolean",
+									"description": "Whether the model supports vision capabilities"
+								},
+								"maxInputTokens": {
+									"type": "number",
+									"description": "Maximum number of input tokens supported by the model"
+								},
+								"maxOutputTokens": {
+									"type": "number",
+									"description": "Maximum number of output tokens supported by the model"
+								},
+								"requiresAPIKey": {
+									"type": "boolean",
+									"description": "Whether the model requires an API key for authentication",
+									"default": true
+								},
+								"editTools": {
+									"type": "array",
+									"description": "List of edit tools supported by the model. If this is not configured, the editor will try multiple edit tools and pick the best one.\n\n- 'find-replace': Find and replace text in a document.\n- 'multi-find-replace': Find and replace text in a document.\n- 'apply-patch': A file-oriented diff format used by some OpenAI models\n- 'code-rewrite': A general but slower editing tool that allows the model to rewrite and code snippet and provide only the replacement to the editor.",
+									"items": {
+										"type": "string",
+										"enum": [
+											"find-replace",
+											"multi-find-replace",
+											"apply-patch",
+											"code-rewrite"
+										]
+									}
+								},
+								"thinking": {
+									"type": "boolean",
+									"default": false,
+									"description": "Whether the model supports thinking capabilities"
+								},
+								"requestHeaders": {
+									"type": "object",
+									"description": "Additional HTTP headers to include with requests to this model. These reserved headers are not allowed and ignored if present: forbidden request headers (https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_request_header), forwarding headers ('forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto'), and others ('api-key', 'authorization', 'content-type', 'openai-intent', 'x-github-api-version', 'x-initiator', 'x-interaction-id', 'x-interaction-type', 'x-onbehalf-extension-id', 'x-request-id', 'x-vscode-user-agent-library-version'). Pattern-based forbidden headers ('proxy-*', 'sec-*', 'x-http-method*' with forbidden methods) are also blocked.",
+									"additionalProperties": {
+										"type": "string"
+									}
+								}
+							},
+							"required": [
+								"name",
+								"url",
+								"toolCalling",
+								"vision",
+								"maxInputTokens",
+								"maxOutputTokens",
+								"requiresAPIKey"
+							],
+							"additionalProperties": false
+						},
+						"markdownDescription": "Configure SGLang and local OpenAI-compatible models. Each key should be a unique model ID, and the value should be an object with model configuration including name, url, toolCalling, vision, maxInputTokens, and maxOutputTokens properties. SGLang models automatically handle tool message format conversion and enforce max_tokens limits."
+					},
 					"github.copilot.chat.alternateGptPrompt.enabled": {
 						"type": "boolean",
 						"default": false,

@@ -199,6 +199,13 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 			this.logService.error(`[SGLangEndpoint] === END RESPONSE VALUE (${typeof response.value === 'string' ? response.value.length : 'N/A'} chars) ===`);
 		}
 		
+		// Log tool calls if present
+		if ('toolCalls' in response && response.toolCalls) {
+			this.logService.error(`[SGLangEndpoint] === TOOL CALLS IN RESPONSE ===`);
+			this.logService.error(`[SGLangEndpoint] Number of tool calls: ${Array.isArray(response.toolCalls) ? response.toolCalls.length : 'N/A'}`);
+			this.logService.error(`[SGLangEndpoint] ${JSON.stringify(response.toolCalls, null, 2)}`);
+		}
+		
 		if ('reason' in response) {
 			this.logService.error(`[SGLangEndpoint] ⚠️ Response reason: ${response.reason}`);
 		}

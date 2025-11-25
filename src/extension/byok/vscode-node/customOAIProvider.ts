@@ -11,7 +11,7 @@ import { IExperimentationService } from '../../../platform/telemetry/common/null
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { CopilotLanguageModelWrapper } from '../../conversation/vscode-node/languageModelAccess';
 import { BYOKAuthType, BYOKKnownModels, BYOKModelCapabilities, BYOKModelProvider, resolveModelInfo } from '../common/byokProvider';
-import { OpenAIEndpoint } from '../node/openAIEndpoint';
+import { SGLangEndpoint } from '../node/sglangEndpoint';
 import { IBYOKStorageService } from './byokStorageService';
 import { promptForAPIKey } from './byokUIService';
 import { CustomOAIModelConfigurator } from './customOAIModelConfigurator';
@@ -200,7 +200,7 @@ export class CustomOAIBYOKModelProvider implements BYOKModelProvider<CustomOAIMo
 			editTools: model.capabilities.editTools?.filter(isEndpointEditToolName),
 			requestHeaders: model.requestHeaders,
 		});
-		const openAIChatEndpoint = this._instantiationService.createInstance(OpenAIEndpoint, modelInfo, apiKey ?? '', model.url);
+		const openAIChatEndpoint = this._instantiationService.createInstance(SGLangEndpoint, modelInfo, apiKey ?? '', model.url);
 		return this._lmWrapper.provideLanguageModelResponse(openAIChatEndpoint, messages, options, options.requestInitiator, progress, token);
 	}
 
@@ -225,7 +225,7 @@ export class CustomOAIBYOKModelProvider implements BYOKModelProvider<CustomOAIMo
 			thinking: model.thinking,
 			requestHeaders: model.requestHeaders
 		});
-		const openAIChatEndpoint = this._instantiationService.createInstance(OpenAIEndpoint, modelInfo, apiKey ?? '', model.url);
+		const openAIChatEndpoint = this._instantiationService.createInstance(SGLangEndpoint, modelInfo, apiKey ?? '', model.url);
 		return this._lmWrapper.provideTokenCount(openAIChatEndpoint, text);
 	}
 

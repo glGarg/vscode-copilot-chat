@@ -69,12 +69,19 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 		this.logService.error(`[SGLangEndpoint] Messages count: ${body.messages?.length || 0}`);
 		this.logService.error(`[SGLangEndpoint] Tools count: ${body.tools?.length || 0}`);
 		
-		// Log message summaries
+		// Log full messages
 		if (body.messages) {
 			body.messages.forEach((m: any, idx: number) => {
 				const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-				this.logService.warn(`[SGLangEndpoint] Message ${idx}: role=${m.role}, length=${content.length}, preview="${content.substring(0, 150).replace(/\n/g, ' ')}..."`);
+				this.logService.error(`[SGLangEndpoint] === MESSAGE ${idx} (${m.role}) ===`);
+				this.logService.error(`[SGLangEndpoint] ${content}`);
 			});
+		}
+		
+		// Log tools
+		if (body.tools) {
+			this.logService.error(`[SGLangEndpoint] === TOOLS ===`);
+			this.logService.error(`[SGLangEndpoint] ${JSON.stringify(body.tools, null, 2)}`);
 		}
 		
 		// Convert "tool" role messages to "user" role
@@ -88,7 +95,7 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 					const toolCallId = ('tool_call_id' in msg) ? msg.tool_call_id : 'unknown';
 					const content = ('content' in msg) ? msg.content : '';
 					
-					this.logService.warn(`[SGLangEndpoint] Converting tool message to user message (tool_call_id: ${toolCallId}, content length: ${typeof content === 'string' ? content.length : 'N/A'})`);
+					this.logService.error(`[SGLangEndpoint] Converting tool message to user message (tool_call_id: ${toolCallId})`);
 					
 					return {
 						role: 'user',
@@ -187,8 +194,9 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 		this.logService.error(`[SGLangEndpoint] Response type: ${response.type}`);
 		
 		if ('value' in response) {
-			this.logService.error(`[SGLangEndpoint] Response value length: ${typeof response.value === 'string' ? response.value.length : 'N/A'}`);
-			this.logService.warn(`[SGLangEndpoint] Response preview: ${typeof response.value === 'string' ? response.value.substring(0, 200) : 'N/A'}`);
+			this.logService.error(`[SGLangEndpoint] === RESPONSE VALUE ===`);
+			this.logService.error(`[SGLangEndpoint] ${response.value}`);
+			this.logService.error(`[SGLangEndpoint] === END RESPONSE VALUE (${typeof response.value === 'string' ? response.value.length : 'N/A'} chars) ===`);
 		}
 		
 		if ('reason' in response) {
@@ -196,10 +204,15 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 		}
 		
 		if ('truncatedValue' in response) {
-			this.logService.error(`[SGLangEndpoint] ⚠️ Response was truncated! Length: ${typeof response.truncatedValue === 'string' ? response.truncatedValue.length : 'N/A'}`);
+			this.logService.error(`[SGLangEndpoint] ⚠️ RESPONSE WAS TRUNCATED ⚠️`);
+			this.logService.error(`[SGLangEndpoint] === TRUNCATED VALUE ===`);
+			this.logService.error(`[SGLangEndpoint] ${response.truncatedValue}`);
+			this.logService.error(`[SGLangEndpoint] === END TRUNCATED VALUE (${typeof response.truncatedValue === 'string' ? response.truncatedValue.length : 'N/A'} chars) ===`);
 		}
 		
-		this.logService.warn(`[SGLangEndpoint] Full response: ${JSON.stringify(response, null, 2).substring(0, 1000)}`);
+		// Log full response structure
+		this.logService.error(`[SGLangEndpoint] === FULL RESPONSE OBJECT ===`);
+		this.logService.error(`[SGLangEndpoint] ${JSON.stringify(response, null, 2)}`);
 		
 		return response;
 	}

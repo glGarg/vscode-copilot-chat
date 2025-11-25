@@ -68,7 +68,14 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 		this.logService.error(`[SGLangEndpoint] === REQUEST BODY BEFORE TOOL MESSAGE CONVERSION ===`);
 		this.logService.error(`[SGLangEndpoint] Messages count: ${body.messages?.length || 0}`);
 		this.logService.error(`[SGLangEndpoint] Tools count: ${body.tools?.length || 0}`);
-		this.logService.warn(`[SGLangEndpoint] Original messages: ${JSON.stringify(body.messages?.map((m: any) => ({ role: m.role, contentLength: typeof m.content === 'string' ? m.content.length : 'N/A' })), null, 2)}`);
+		
+		// Log message summaries
+		if (body.messages) {
+			body.messages.forEach((m: any, idx: number) => {
+				const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+				this.logService.warn(`[SGLangEndpoint] Message ${idx}: role=${m.role}, length=${content.length}, preview="${content.substring(0, 150).replace(/\n/g, ' ')}..."`);
+			});
+		}
 		
 		// Convert "tool" role messages to "user" role
 		// SGLang/vLLM don't support the "tool" role for tool call results
@@ -97,7 +104,6 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 		}
 		
 		this.logService.error(`[SGLangEndpoint] === REQUEST BODY AFTER TOOL MESSAGE CONVERSION ===`);
-		this.logService.warn(`[SGLangEndpoint] Final messages: ${JSON.stringify(body.messages?.map((m: any) => ({ role: m.role, contentLength: typeof m.content === 'string' ? m.content.length : 'N/A' })), null, 2)}`);
 		
 		return body;
 	}

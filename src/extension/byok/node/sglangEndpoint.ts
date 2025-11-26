@@ -192,6 +192,16 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 		
 		this.logService.error(`[SGLangEndpoint] === RESPONSE RECEIVED ===`);
 		this.logService.error(`[SGLangEndpoint] Response type: ${response.type}`);
+		this.logService.error(`[SGLangEndpoint] Response keys: ${Object.keys(response).join(', ')}`);
+		
+		// Log everything in the response object
+		for (const [key, value] of Object.entries(response)) {
+			if (key === 'value' || key === 'truncatedValue') {
+				// These are logged separately below
+				continue;
+			}
+			this.logService.error(`[SGLangEndpoint] response.${key} = ${JSON.stringify(value, null, 2)}`);
+		}
 		
 		if ('value' in response) {
 			this.logService.error(`[SGLangEndpoint] === RESPONSE VALUE ===`);
@@ -199,11 +209,15 @@ export class SGLangEndpoint extends OpenAIEndpoint {
 			this.logService.error(`[SGLangEndpoint] === END RESPONSE VALUE (${typeof response.value === 'string' ? response.value.length : 'N/A'} chars) ===`);
 		}
 		
-		// Log tool calls if present
-		if ('toolCalls' in response && response.toolCalls) {
+		// Log tool calls if present in any form
+		const anyResponse = response as any;
+		if (anyResponse.toolCalls) {
 			this.logService.error(`[SGLangEndpoint] === TOOL CALLS IN RESPONSE ===`);
-			this.logService.error(`[SGLangEndpoint] Number of tool calls: ${Array.isArray(response.toolCalls) ? response.toolCalls.length : 'N/A'}`);
-			this.logService.error(`[SGLangEndpoint] ${JSON.stringify(response.toolCalls, null, 2)}`);
+			this.logService.error(`[SGLangEndpoint] ${JSON.stringify(anyResponse.toolCalls, null, 2)}`);
+		}
+		if (anyResponse.tool_calls) {
+			this.logService.error(`[SGLangEndpoint] === TOOL_CALLS IN RESPONSE ===`);
+			this.logService.error(`[SGLangEndpoint] ${JSON.stringify(anyResponse.tool_calls, null, 2)}`);
 		}
 		
 		if ('reason' in response) {

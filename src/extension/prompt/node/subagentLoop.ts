@@ -18,6 +18,7 @@ import { IToolCallingLoopOptions, ToolCallingLoop, ToolCallingLoopFetchOptions }
 import { AgentPrompt } from '../../prompts/node/agent/agentPrompt';
 import { PromptElementCtor } from '../../prompts/node/base/promptElement';
 import { PromptRenderer } from '../../prompts/node/base/promptRenderer';
+import { SearchSubagentPrompt } from '../../prompts/node/agent/searchSubagentPrompt';
 import { ToolName } from '../../tools/common/toolNames';
 import { normalizeToolSchema } from '../../tools/common/toolSchemaNormalizer';
 import { ChatVariablesCollection } from '../common/chatVariablesCollection';
@@ -82,8 +83,30 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 		}
 	}
 
+	protected async getSearchSubagentEndpoint() {
+		try {
+			const qwenModelId = 'customoai/qwen3-coder-30b-a3b-instruct';
+			const vscode = await import('vscode');
+			const models = await vscode.lm.selectChatModels({ id: qwenModelId });
+			
+			if (models && models.length > 0) {
+				const endpoint = await this.endpointProvider.getChatEndpoint(models[0]);
+				this._logService.info(`[SubagentToolCallingLoop] Using Qwen model for search subagent: ${qwenModelId}`);
+				return endpoint;
+			} else {
+				this._logService.warn(`[SubagentToolCallingLoop] Qwen model not found via selectChatModels, falling back to default endpoint`);
+				return await this.getEndpoint(this.options.request);
+			}
+		} catch (error) {
+			this._logService.warn(`[SubagentToolCallingLoop] Failed to get Qwen endpoint, falling back to default: ${error}`);
+			return await this.getEndpoint(this.options.request);
+		}
+	}
+
 	protected async buildPrompt(promptContext: IBuildPromptContext, progress: Progress<ChatResponseReferencePart | ChatResponseProgressPart>, token: CancellationToken): Promise<IBuildPromptResult> {
-		const endpoint = await this.getEndpoint(this.options.request);
+		const endpoint = this.options.customPromptClass === SearchSubagentPrompt
+			? await this.getSearchSubagentEndpoint()
+			: await this.getEndpoint(this.options.request);
 		const PromptClass = this.options.customPromptClass ?? AgentPrompt;
 		const renderer = PromptRenderer.create(
 			this.instantiationService,
@@ -116,7 +139,9 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 	}
 
 	protected async fetch({ messages, finishedCb, requestOptions }: ToolCallingLoopFetchOptions, token: CancellationToken): Promise<ChatResponse> {
-		const endpoint = await this.getEndpoint(this.options.request);
+		const endpoint = this.options.customPromptClass === SearchSubagentPrompt
+			? await this.getSearchSubagentEndpoint()
+			: await this.getEndpoint(this.options.request);
 		return endpoint.makeChatRequest2({
 			debugName: SubagentToolCallingLoop.ID,
 			messages,

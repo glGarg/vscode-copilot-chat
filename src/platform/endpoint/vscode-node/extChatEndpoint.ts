@@ -53,7 +53,7 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 	) {
 		// Initialize with the model's max tokens
 		this._maxTokens = languageModel.maxInputTokens;
-		this.supportedEditTools = languageModel.capabilities.editToolsHint?.filter(isEndpointEditToolName);
+		this.supportedEditTools = languageModel.capabilities?.editToolsHint?.filter(isEndpointEditToolName);
 	}
 
 	get modelMaxPromptTokens(): number {

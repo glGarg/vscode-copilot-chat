@@ -50,7 +50,7 @@ export interface HeaderContributor {
 }
 
 // The maximum time to wait for a request to complete.
-const requestTimeoutMs = 30 * 1000; // 30 seconds
+const requestTimeoutMs = 5 * 60 * 1000; // 5 minutes for local models
 
 
 /**

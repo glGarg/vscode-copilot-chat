@@ -5,7 +5,8 @@
 
 import type * as vscode from 'vscode';
 import { ChatFetchResponseType } from '../../../platform/chat/common/commonTypes';
-import { ILogService } from '../../../platform/log/common/logService';
+import { CapturingToken } from '../../../platform/requestLogger/common/capturingToken';
+import { IRequestLogger } from '../../../platform/requestLogger/node/requestLogger';
 import { ChatResponseStreamImpl } from '../../../util/common/chatResponseStreamImpl';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatPrepareToolInvocationPart, ChatResponseNotebookEditPart, ChatResponseTextEditPart, ExtendedLanguageModelToolResult, LanguageModelTextPart } from '../../../vscodeTypes';
@@ -30,15 +31,9 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 
 	constructor(
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		@ILogService private readonly logService: ILogService,
+		@IRequestLogger private readonly requestLogger: IRequestLogger,
 	) { }
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<ISearchSubagentParams>, token: vscode.CancellationToken) {
-		this.logService.info('[SearchSubagent] ========================================');
-		this.logService.info('[SearchSubagent] Starting search subagent invocation');
-		this.logService.info('[SearchSubagent] Input query:', options.input.query);
-		this.logService.info('[SearchSubagent] Input description:', options.input.description);
-		this.logService.info('[SearchSubagent] ========================================');
-
 		const searchInstruction = [
 			`Search objective: ${options.input.query}`,
 			'',
@@ -63,13 +58,6 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 			''
 		].join('\n');
 
-		this.logService.info('[SearchSubagent] Search instruction:', searchInstruction);
-
-		this.logService.info('[SearchSubagent] Creating tool calling loop');
-		this.logService.info('[SearchSubagent] Tool call limit:', 25);
-		this.logService.info('[SearchSubagent] Allowed tools:', [ToolName.Codebase, ToolName.FindFiles, ToolName.FindTextInFiles, ToolName.ReadFile]);
-		this.logService.info('[SearchSubagent] Prompt class:', 'SearchSubagentPrompt');
-
 		const loop = this.instantiationService.createInstance(SubagentToolCallingLoop, {
 			toolCallLimit: 25,
 			conversation: new Conversation('', [new Turn('', { type: 'user', message: searchInstruction })]),
@@ -85,67 +73,35 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 			part => part instanceof ChatPrepareToolInvocationPart || part instanceof ChatResponseTextEditPart || part instanceof ChatResponseNotebookEditPart
 		);
 
-		const loopResult = await loop.run(stream, token);
+		// Create a new capturing token to group this search subagent and all its nested tool calls
+		// Similar to how DefaultIntentRequestHandler does it
+		const searchSubagentToken = new CapturingToken(
+			`Search: ${options.input.query.substring(0, 50)}${options.input.query.length > 50 ? '...' : ''}`,
+			'search',
+			false
+		);
 
-		this.logService.info('[SearchSubagent] ========================================');
-		this.logService.info('[SearchSubagent] Tool calling loop completed');
-		this.logService.info('[SearchSubagent] Response type:', loopResult.response.type);
-		this.logService.info('[SearchSubagent] Number of rounds:', loopResult.toolCallRounds.length);
-		this.logService.info('[SearchSubagent] Total tool calls:', loopResult.toolCallRounds.reduce((sum, round) => sum + round.toolCalls.length, 0));
-		this.logService.info('[SearchSubagent] ========================================');
+		// Wrap the loop execution in captureInvocation with the new token
+		// All nested tool calls will now be logged under this same CapturingToken
+		const loopResult = await this.requestLogger.captureInvocation(searchSubagentToken, () => loop.run(stream, token));
 
-		// Log details of each tool call round with full information
-		loopResult.toolCallRounds.forEach((round, roundIndex) => {
-			this.logService.info('[SearchSubagent] ----------------------------------------');
-			this.logService.info(`[SearchSubagent] ROUND ${roundIndex + 1}/${loopResult.toolCallRounds.length}`);
-			this.logService.info('[SearchSubagent] ----------------------------------------');
-			
-			// Log each tool call in this round with full details
-			round.toolCalls.forEach((toolCall, tcIndex) => {
-				this.logService.info(`[SearchSubagent] Tool Call ${tcIndex + 1}/${round.toolCalls.length} in Round ${roundIndex + 1}:`);
-				this.logService.info(`[SearchSubagent]   Name: ${toolCall.name}`);
-				this.logService.info(`[SearchSubagent]   ID: ${toolCall.id}`);
-				this.logService.info(`[SearchSubagent]   Arguments (full):`, toolCall.arguments);
-				
-				// Try to parse and log arguments in a readable format
-				try {
-					const parsedArgs = JSON.parse(toolCall.arguments);
-					this.logService.info(`[SearchSubagent]   Parsed Arguments:`, JSON.stringify(parsedArgs, null, 2));
-				} catch (e) {
-					this.logService.warn(`[SearchSubagent]   Failed to parse arguments as JSON`);
-				}
-			});
-			
-			// Log the agent's response after this round
-			if (round.response) {
-				this.logService.info(`[SearchSubagent] Agent Response for Round ${roundIndex + 1}:`);
-				this.logService.info(`[SearchSubagent]   Length: ${round.response.length} characters`);
-				this.logService.info(`[SearchSubagent]   Full Response:`, round.response);
-			} else {
-				this.logService.info(`[SearchSubagent] No response text for Round ${roundIndex + 1}`);
-			}
-		});
+		// Build subagent trajectory metadata that will be logged via toolMetadata
+		// All nested tool calls are already logged by ToolCallingLoop.logToolResult()
+		const toolMetadata = {
+			query: options.input.query,
+			description: options.input.description
+		};
 
 		let subagentResponse = '';
 		if (loopResult.response.type === ChatFetchResponseType.Success) {
 			subagentResponse = loopResult.toolCallRounds.at(-1)?.response ?? loopResult.round.response ?? '';
-			this.logService.info('[SearchSubagent] ========================================');
-			this.logService.info('[SearchSubagent] Search completed successfully');
-			this.logService.info('[SearchSubagent] Final response length:', subagentResponse.length);
-			this.logService.info('[SearchSubagent] Final response (full):');
-			this.logService.info(subagentResponse);
-			this.logService.info('[SearchSubagent] ========================================');
 		} else {
 			subagentResponse = `The search subagent request failed with this message:\n${loopResult.response.type}: ${loopResult.response.reason}`;
-			this.logService.error('[SearchSubagent] ========================================');
-			this.logService.error('[SearchSubagent] Search FAILED');
-			this.logService.error('[SearchSubagent] Error type:', loopResult.response.type);
-			this.logService.error('[SearchSubagent] Error reason:', loopResult.response.reason);
-			this.logService.error('[SearchSubagent] ========================================');
 		}
 
+		// toolMetadata will be automatically included in exportAllPromptLogsAsJsonCommand
 		const result = new ExtendedLanguageModelToolResult([new LanguageModelTextPart(subagentResponse)]);
-		this.logService.info('[SearchSubagent] Returning tool result');
+		result.toolMetadata = toolMetadata;
 		return result;
 	}
 

@@ -44,6 +44,8 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 			`${options.input.details}`,
 			'',
 		].join('\n');
+		// they have a simple query in sft data.
+		const searchInstruction = `Find relevant code snippets for: ${options.input.query}`;
 
 		const loop = this.instantiationService.createInstance(SubagentToolCallingLoop, {
 			toolCallLimit: 5,

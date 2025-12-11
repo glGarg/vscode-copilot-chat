@@ -5,6 +5,7 @@
 
 import type * as vscode from 'vscode';
 import { ChatFetchResponseType } from '../../../platform/chat/common/commonTypes';
+import { CapturingToken } from '../../../platform/requestLogger/common/capturingToken';
 import { IRequestLogger } from '../../../platform/requestLogger/node/requestLogger';
 import { ChatResponseStreamImpl } from '../../../util/common/chatResponseStreamImpl';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -72,13 +73,20 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 			part => part instanceof ChatPrepareToolInvocationPart || part instanceof ChatResponseTextEditPart || part instanceof ChatResponseNotebookEditPart
 		);
 
-		// Wrap the loop execution in captureInvocation to ensure all nested tool calls
-		// from the search subagent are logged under the parent request's context
-		const loopResult = await this.requestLogger.captureInvocation(
-			this._inputContext!.request!,
-			() => loop.run(stream, token)
+		// Create a new capturing token to group this search subagent and all its nested tool calls
+		// Similar to how DefaultIntentRequestHandler does it
+		const searchSubagentToken = new CapturingToken(
+			`Search: ${options.input.query.substring(0, 50)}${options.input.query.length > 50 ? '...' : ''}`,
+			'search',
+			false
 		);
 
+		// Wrap the loop execution in captureInvocation with the new token
+		// All nested tool calls will now be logged under this same CapturingToken
+		const loopResult = await this.requestLogger.captureInvocation(searchSubagentToken, () => loop.run(stream, token));
+
+		// Build subagent trajectory metadata that will be logged via toolMetadata
+		// All nested tool calls are already logged by ToolCallingLoop.logToolResult()
 		const toolMetadata = {
 			query: options.input.query,
 			description: options.input.description
@@ -91,9 +99,19 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 			subagentResponse = `The search subagent request failed with this message:\n${loopResult.response.type}: ${loopResult.response.reason}`;
 		}
 
-		// toolMetadata will be automatically included in exportAllPromptLogsAsJsonCommand
+		// Create the tool result
 		const result = new ExtendedLanguageModelToolResult([new LanguageModelTextPart(subagentResponse)]);
 		result.toolMetadata = toolMetadata;
+
+		// Explicitly log the search_subagent tool call so it appears in the chat export
+		// This must be done OUTSIDE of captureInvocation so it gets the parent token
+		this.requestLogger.logToolCall(
+			options.toolCallId,
+			SearchSubagentTool.toolName,
+			options.input,
+			result
+		);
+
 		return result;
 	}
 

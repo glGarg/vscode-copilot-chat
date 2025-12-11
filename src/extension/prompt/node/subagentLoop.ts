@@ -6,6 +6,7 @@
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import type { CancellationToken, ChatRequest, ChatResponseStream, LanguageModelChat, LanguageModelToolInformation, Progress } from 'vscode';
+import { Raw } from '@vscode/prompt-tsx';
 import { IAuthenticationChatUpgradeService } from '../../../platform/authentication/common/authenticationUpgrade';
 import { ChatLocation, ChatResponse } from '../../../platform/chat/common/commonTypes';
 import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
@@ -119,7 +120,7 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 		// This should match a model configured in github.copilot.chat.customOAIModels setting
 		const modelSelector = {
 			vendor: 'customoai',
-			id: 'qwen3-4b'
+			id: 'searchagent-4b'
 		};
 		
 		this._logService.info('[SubagentToolCallingLoop] Attempting to select model:', JSON.stringify(modelSelector, null, 2));
@@ -209,6 +210,33 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 				// TODO can't do virtual tools at this level
 				.slice(0, 128);
 		}
+	}
+
+	protected override applyMessagePostProcessing(messages: Raw.ChatMessage[]): Raw.ChatMessage[] {
+		let processedMessages = super.applyMessagePostProcessing(messages);
+		
+		// Count the number of assistant turns (tool calling rounds) to determine if we're on the last turn
+		const assistantTurns = processedMessages.filter(m => m.role === Raw.ChatRole.Assistant).length;
+		const isApproachingLimit = assistantTurns >= this.options.toolCallLimit - 1;
+		
+		if (isApproachingLimit) {
+			// Add a partial assistant message with coaxing text to force model to produce final answer
+			// match train logic
+			// with "OK, now I'm ready to produce a final answer. <final_answer>\n" before generating
+			this._logService.info(`[SubagentToolCallingLoop] Adding final answer coaxing text (turn ${assistantTurns}/${this.options.toolCallLimit})`);
+			
+			// Append a partial assistant message that pre-fills the start of the response
+			// The model will continue from this point
+			processedMessages = [
+				...processedMessages,
+				{
+					role: Raw.ChatRole.Assistant,
+					content: "OK, now I'm ready to produce a final answer. <final_answer>\n"
+				} satisfies Raw.AssistantChatMessage
+			];
+		}
+		
+		return processedMessages;
 	}
 
 	protected async fetch({ messages, finishedCb, requestOptions }: ToolCallingLoopFetchOptions, token: CancellationToken): Promise<ChatResponse> {

@@ -49,7 +49,8 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 		@ITokenizerProvider private readonly _tokenizerProvider: ITokenizerProvider,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IRequestLogger private readonly _requestLogger: IRequestLogger,
-		@IEndpointProvider private readonly _endpointProvider: IEndpointProvider
+		@IEndpointProvider private readonly _endpointProvider: IEndpointProvider,
+		@ILogService private readonly _logService: ILogService
 	) {
 		// Initialize with the model's max tokens
 		this._maxTokens = languageModel.maxInputTokens;
@@ -164,23 +165,15 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 		location,
 		source,
 	}: IMakeChatRequestOptions, token: CancellationToken): Promise<ChatResponse> {
-		const vscodeMessages = convertToApiChatMessage(messages);
+		const maxRetries = 3;
+		let lastError: ChatResponse | undefined;
 		const ourRequestId = generateUuid();
 
 		const allEndpoints = await this._endpointProvider.getAllChatEndpoints();
 		const currentEndpoint = allEndpoints.find(endpoint => endpoint.model === this.model);
 		const isExternalModel = !currentEndpoint;
 
-		const vscodeOptions: vscode.LanguageModelChatRequestOptions = {
-			tools: ((requestOptions?.tools ?? []) as OpenAiFunctionTool[]).map(tool => ({
-				name: tool.function.name,
-				description: tool.function.description,
-				inputSchema: tool.function.parameters,
-			}))
-		};
-
-		const streamRecorder = new FetchStreamRecorder(finishedCb);
-
+		// Create the logged request ONCE for all retry attempts
 		const pendingLoggedChatRequest = isExternalModel ? this._requestLogger.logChatRequest(debugName + '-external', this, {
 			messages,
 			model: this.model,
@@ -193,11 +186,87 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 		})
 			: undefined;
 
+		for (let attempt = 1; attempt <= maxRetries; attempt++) {
+			if (token.isCancellationRequested) {
+				const cancelResult = {
+					type: ChatFetchResponseType.Canceled,
+					reason: 'Request was cancelled',
+					requestId: ourRequestId,
+					serverRequestId: undefined
+				};
+				pendingLoggedChatRequest?.resolve(cancelResult);
+				return cancelResult;
+			}
+
+			if (attempt > 1) {
+				this._logService.info(`[ExtChatEndpoint] Retry attempt ${attempt}/${maxRetries} for model ${this.model}`);
+			}
+
+			const result = await this._makeSingleChatRequest({
+				debugName,
+				messages,
+				requestOptions,
+				finishedCb,
+				location,
+				source,
+			}, token, attempt, ourRequestId);
+
+			// If successful or a non-retryable error, return immediately
+			if (result.type === ChatFetchResponseType.Success || 
+				(result.type !== ChatFetchResponseType.Unknown && result.type !== ChatFetchResponseType.Failed)) {
+				if (attempt > 1 && result.type === ChatFetchResponseType.Success) {
+					this._logService.info(`[ExtChatEndpoint] Retry succeeded on attempt ${attempt}/${maxRetries}`);
+				}
+				// Log the final result
+				if (result.type === ChatFetchResponseType.Success) {
+					pendingLoggedChatRequest?.resolve({ ...result, value: [result.value] }, undefined);
+				} else {
+					pendingLoggedChatRequest?.resolve(result);
+				}
+				return result;
+			}
+
+			// For Unknown (empty response) or Failed errors, retry
+			this._logService.warn(`[ExtChatEndpoint] Request failed with ${result.type}: ${result.reason}`);
+			lastError = result;
+			if (attempt < maxRetries) {
+				// Wait briefly before retrying (exponential backoff)
+				const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+				this._logService.info(`[ExtChatEndpoint] Waiting ${delayMs}ms before retry...`);
+				await new Promise(resolve => setTimeout(resolve, delayMs));
+			}
+		}
+
+		// All retries exhausted, return the last error
+		this._logService.error(`[ExtChatEndpoint] All ${maxRetries} retry attempts exhausted for model ${this.model}`);
+		pendingLoggedChatRequest?.resolve(lastError!);
+		return lastError!;
+	}
+
+	private async _makeSingleChatRequest({
+		debugName,
+		messages,
+		requestOptions,
+		finishedCb,
+		location,
+		source,
+	}: IMakeChatRequestOptions, token: CancellationToken, attemptNumber: number, requestId: string): Promise<ChatResponse> {
+		const vscodeMessages = convertToApiChatMessage(messages);
+
+		const vscodeOptions: vscode.LanguageModelChatRequestOptions = {
+			tools: ((requestOptions?.tools ?? []) as OpenAiFunctionTool[]).map(tool => ({
+				name: tool.function.name,
+				description: tool.function.description,
+				inputSchema: tool.function.parameters,
+			}))
+		};
+
+		const streamRecorder = new FetchStreamRecorder(finishedCb);
+
 		try {
 			const response = await this.languageModel.sendRequest(vscodeMessages, vscodeOptions, token);
 			let text = '';
 			let numToolsCalled = 0;
-			const requestId = ourRequestId;
 
 			// consume stream
 			for await (const chunk of response.stream) {
@@ -247,26 +316,23 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 					value: text,
 					resolvedModel: this.languageModel.id
 				};
-				pendingLoggedChatRequest?.resolve({ ...response, value: [response.value] }, streamRecorder.deltas);
 				return response;
 			} else {
 				const result: ChatResponse = {
 					type: ChatFetchResponseType.Unknown,
-					reason: 'No response from language model',
+					reason: `No response from language model (attempt ${attemptNumber})`,
 					requestId: requestId,
 					serverRequestId: undefined
 				};
-				pendingLoggedChatRequest?.resolve(result);
 				return result;
 			}
 		} catch (e) {
 			const result: ChatResponse = {
 				type: ChatFetchResponseType.Failed,
 				reason: toErrorMessage(e, true),
-				requestId: generateUuid(),
+				requestId: requestId,
 				serverRequestId: undefined
 			};
-			pendingLoggedChatRequest?.resolve(result);
 			return result;
 		}
 	}

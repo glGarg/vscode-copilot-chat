@@ -69,6 +69,12 @@ export interface IToolCallingLoopOptions {
 	 * The current chat request
 	 */
 	request: ChatRequest;
+	/**
+	 * Optional capturing token to explicitly associate all tool calls and requests
+	 * with a specific trajectory. Used by subagents to ensure nested tool calls
+	 * are logged under the correct sub-trajectory.
+	 */
+	capturingToken?: import('../../../platform/requestLogger/common/capturingToken').CapturingToken;
 }
 
 export interface IToolCallingResponseEvent {
@@ -652,7 +658,25 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		}
 
 		if (originalCall) {
-			this._requestLogger.logToolCall(originalCall.id || generateUuid(), originalCall.name, originalCall.arguments, metadata.result, lastTurn?.thinking);
+			// If we have an explicit capturing token (e.g., for subagents), wrap the logging
+			// call in captureInvocation to ensure it's associated with the correct trajectory.
+			// This is necessary because AsyncLocalStorage context can be lost across native
+			// calls like vscode.lm.invokeTool.
+			const logCall = () => this._requestLogger.logToolCall(
+				originalCall!.id || generateUuid(),
+				originalCall!.name,
+				originalCall!.arguments,
+				metadata.result,
+				lastTurn?.thinking
+			);
+
+			if (this.options.capturingToken) {
+				this._requestLogger.captureInvocation(this.options.capturingToken, async () => {
+					logCall();
+				}).catch(e => this._logService.error('Failed to log tool call:', e));
+			} else {
+				logCall();
+			}
 		}
 	}
 }

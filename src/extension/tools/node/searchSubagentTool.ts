@@ -58,6 +58,14 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 			''
 		].join('\n');
 
+		// Create a new capturing token to group this search subagent and all its nested tool calls
+		// Similar to how DefaultIntentRequestHandler does it
+		const searchSubagentToken = new CapturingToken(
+			`Search: ${options.input.query.substring(0, 50)}${options.input.query.length > 50 ? '...' : ''}`,
+			'search',
+			false
+		);
+
 		const loop = this.instantiationService.createInstance(SubagentToolCallingLoop, {
 			toolCallLimit: 25,
 			conversation: new Conversation('', [new Turn('', { type: 'user', message: searchInstruction })]),
@@ -66,19 +74,12 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 			promptText: options.input.query,
 			allowedTools: new Set([ToolName.Codebase, ToolName.FindFiles, ToolName.FindTextInFiles, ToolName.ReadFile]),
 			customPromptClass: SearchSubagentPrompt,
+			capturingToken: searchSubagentToken,
 		});
 
 		const stream = this._inputContext?.stream && ChatResponseStreamImpl.filter(
 			this._inputContext.stream,
 			part => part instanceof ChatPrepareToolInvocationPart || part instanceof ChatResponseTextEditPart || part instanceof ChatResponseNotebookEditPart
-		);
-
-		// Create a new capturing token to group this search subagent and all its nested tool calls
-		// Similar to how DefaultIntentRequestHandler does it
-		const searchSubagentToken = new CapturingToken(
-			`Search: ${options.input.query.substring(0, 50)}${options.input.query.length > 50 ? '...' : ''}`,
-			'search',
-			false
 		);
 
 		// Wrap the loop execution in captureInvocation with the new token

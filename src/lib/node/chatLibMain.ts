@@ -366,7 +366,7 @@ function setupServices(options: INESProviderOptions) {
 	builder.define(IConversationOptions, {
 		_serviceBrand: undefined,
 		maxResponseTokens: undefined,
-		temperature: 0.1,
+		temperature: 0.5,  // Increased from 0.1 to improve tool calling variability
 		topP: 1,
 		rejectionMessage: 'Sorry, but I can only assist with programming related questions.',
 	});

@@ -181,17 +181,22 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 
 		const streamRecorder = new FetchStreamRecorder(finishedCb);
 
-		const pendingLoggedChatRequest = isExternalModel ? this._requestLogger.logChatRequest(debugName + '-external', this, {
-			messages,
-			model: this.model,
-			ourRequestId,
-			location,
-			body: {
-				...requestOptions
-			},
-			ignoreStatefulMarker: true
-		})
-			: undefined;
+		// Always log the request, regardless of whether it's external or not
+		// Use -external suffix only for truly external models (not in endpoint provider)
+		const pendingLoggedChatRequest = this._requestLogger.logChatRequest(
+			isExternalModel ? debugName + '-external' : debugName,
+			this,
+			{
+				messages,
+				model: this.model,
+				ourRequestId,
+				location,
+				body: {
+					...requestOptions
+				},
+				ignoreStatefulMarker: true
+			}
+		);
 
 		try {
 			const response = await this.languageModel.sendRequest(vscodeMessages, vscodeOptions, token);

@@ -63,6 +63,10 @@ export class RequestLogTree extends Disposable implements IExtensionContribution
 		const preparePromptLogsAsJson = async (treeItem: ChatPromptItem): Promise<any> => {
 			const logEntries = getExportableLogEntries(treeItem);
 
+			console.log('[preparePromptLogsAsJson] Processing prompt:', treeItem.id);
+			console.log('[preparePromptLogsAsJson] Children count:', treeItem.children.length);
+			console.log('[preparePromptLogsAsJson] Exportable log entries:', logEntries.length);
+
 			if (logEntries.length === 0) {
 				return;
 			}
@@ -71,8 +75,10 @@ export class RequestLogTree extends Disposable implements IExtensionContribution
 
 			for (const logEntry of logEntries) {
 				try {
+					console.log('[preparePromptLogsAsJson] Processing log entry:', logEntry.kind, logEntry.id);
 					promptLogs.push(await logEntry.toJSON());
 				} catch (error) {
+					console.log('[preparePromptLogsAsJson] Error processing log entry:', error);
 					// If we can't get content for this entry, add an error object
 					promptLogs.push({
 						id: logEntry.id,
@@ -82,6 +88,8 @@ export class RequestLogTree extends Disposable implements IExtensionContribution
 					});
 				}
 			}
+
+			console.log('[preparePromptLogsAsJson] Prepared', promptLogs.length, 'logs for prompt');
 
 			return {
 				prompt: treeItem.token.label,
@@ -406,8 +414,15 @@ export class RequestLogTree extends Disposable implements IExtensionContribution
 		}));
 
 		this._register(vscode.commands.registerCommand(exportAllPromptLogsAsJsonCommand, async (savePath?: string) => {
+			console.log('[ExportCommand] ========================================');
+			console.log('[ExportCommand] EXPORT COMMAND CALLED');
+			console.log('[ExportCommand] ========================================');
+			console.log('[ExportCommand] savePath:', savePath);
+			
 			// Build the tree structure to get all chat prompt items
 			const allTreeItems = await this.chatRequestProvider.getChildren();
+
+			console.log('[ExportCommand] Got tree items:', allTreeItems?.length || 0);
 
 			if (!allTreeItems || allTreeItems.length === 0) {
 				vscode.window.showInformationMessage('No chat prompts found to export.');
@@ -416,6 +431,8 @@ export class RequestLogTree extends Disposable implements IExtensionContribution
 
 			// Filter to get only ChatPromptItem instances
 			const chatPromptItems = allTreeItems.filter((item): item is ChatPromptItem => item instanceof ChatPromptItem);
+
+			console.log('[ExportCommand] Filtered chat prompt items:', chatPromptItems.length);
 
 			if (chatPromptItems.length === 0) {
 				vscode.window.showInformationMessage('No chat prompts found to export.');
@@ -454,13 +471,21 @@ export class RequestLogTree extends Disposable implements IExtensionContribution
 
 				// Process each chat prompt item using the shared function
 				for (const chatPromptItem of chatPromptItems) {
+					console.log('[ExportCommand] Processing prompt:', chatPromptItem.id, 'children:', chatPromptItem.children.length);
+					
 					// Use the shared processing function
 					const promptObject = await preparePromptLogsAsJson(chatPromptItem);
 					if (promptObject) {
+						console.log('[ExportCommand] Prompt object created with', promptObject.logCount, 'logs');
 						allPromptsContent.push(promptObject);
 						totalLogEntries += promptObject.logCount;
+					} else {
+						console.log('[ExportCommand] No prompt object created for', chatPromptItem.id);
 					}
 				}
+
+				console.log('[ExportCommand] Total prompts to export:', allPromptsContent.length);
+				console.log('[ExportCommand] Total log entries:', totalLogEntries);
 
 				// Combine all content as JSON
 				const finalContent = JSON.stringify({
@@ -470,8 +495,13 @@ export class RequestLogTree extends Disposable implements IExtensionContribution
 					prompts: allPromptsContent
 				}, null, 2);
 
+				console.log('[ExportCommand] Final JSON length:', finalContent.length);
+
 				// Write to the selected file
 				await vscode.workspace.fs.writeFile(saveUri, Buffer.from(finalContent, 'utf8'));
+
+				console.log('[ExportCommand] File written successfully');
+				console.log('[ExportCommand] ========================================');
 
 				// Show success message with option to reveal the file
 				const revealAction = 'Reveal in Explorer';
@@ -592,6 +622,7 @@ class ChatRequestProvider extends Disposable implements vscode.TreeDataProvider<
 			let lastPrompt: ChatPromptItem | undefined;
 			const result: (ChatPromptItem | TreeChildItem)[] = [];
 			const seen = new Set<CapturingToken>();
+			const seenByLabel = new Map<string, CapturingToken>(); // Track tokens by label for deduplication
 
 			const pushLastPrompt = () => {
 				if (lastPrompt) {
@@ -606,15 +637,55 @@ class ChatRequestProvider extends Disposable implements vscode.TreeDataProvider<
 				}
 			};
 
-			for (const currReq of this.requestLogger.getRequests()) {
+			const allRequests = this.requestLogger.getRequests();
+			console.log('[ChatRequestProvider.getChildren] Total requests from logger:', allRequests.length);
+			
+			// Log entries without tokens for debugging
+			const entriesWithoutToken = allRequests.filter(r => !r.token);
+			if (entriesWithoutToken.length > 0) {
+				console.log('[ChatRequestProvider.getChildren] ⚠️  WARNING: Found', entriesWithoutToken.length, 'entries WITHOUT tokens');
+				entriesWithoutToken.forEach(r => {
+					console.log('[ChatRequestProvider.getChildren]   Entry without token:', r.kind, r.id, 'debugName:', (r as any).entry?.debugName || 'N/A');
+				});
+			}
 
-				if (currReq.token !== lastPrompt?.token) {
+			for (const currReq of allRequests) {
+				// Normalize token: if we've seen a token with the same label, use that canonical token
+				// This fixes issues where AsyncLocalStorage doesn't preserve object identity
+				let effectiveToken = currReq.token;
+				
+				// Debug logging for subagent entries
+				const debugName = (currReq as any).entry?.debugName;
+				if (debugName === 'subagent-external') {
+					console.log('[ChatRequestProvider.getChildren] 🔍 Processing subagent entry:', currReq.id);
+					console.log('[ChatRequestProvider.getChildren]   Has token:', !!currReq.token);
+					console.log('[ChatRequestProvider.getChildren]   Token label:', currReq.token?.label);
+					console.log('[ChatRequestProvider.getChildren]   Token in seen:', currReq.token ? seen.has(currReq.token) : 'N/A');
+				}
+				
+				if (currReq.token && !seen.has(currReq.token)) {
+					const canonicalToken = seenByLabel.get(currReq.token.label);
+					if (canonicalToken) {
+						effectiveToken = canonicalToken;
+						console.log('[ChatRequestProvider.getChildren] Deduplicated token by label:', currReq.token.label);
+					} else {
+						seenByLabel.set(currReq.token.label, currReq.token);
+					}
+				} else if (currReq.token && seen.has(currReq.token)) {
+					// Token already seen - this means we're continuing with same prompt
+					if (debugName === 'subagent-external') {
+						console.log('[ChatRequestProvider.getChildren]   ⚠️  Token already in seen set!');
+					}
+				}
+
+				if (effectiveToken !== lastPrompt?.token) {
 					pushLastPrompt();
-					lastPrompt = (currReq.token === undefined ? undefined
-						: ChatPromptItem.create(currReq, currReq.token, seen.has(currReq.token))
+					lastPrompt = (effectiveToken === undefined ? undefined
+						: ChatPromptItem.create(currReq, effectiveToken, seen.has(effectiveToken))
 					);
-					if (currReq.token) {
-						seen.add(currReq.token);
+					if (effectiveToken) {
+						seen.add(effectiveToken);
+						console.log('[ChatRequestProvider.getChildren] Created/found ChatPromptItem for token:', effectiveToken.label);
 					}
 				}
 
@@ -625,13 +696,16 @@ class ChatRequestProvider extends Disposable implements vscode.TreeDataProvider<
 					const alreadyIncludesThisRequest = lastPrompt.children.find(existingChild => existingChild.id === currReqTreeItem.id);
 					if (!alreadyIncludesThisRequest) {
 						lastPrompt.children.push(currReqTreeItem);
+						console.log('[ChatRequestProvider.getChildren] Added child to prompt:', currReq.kind, currReq.id);
 					}
 				}
 			}
 
 			pushLastPrompt();
 
-			return filterMap(result, r => {
+			console.log('[ChatRequestProvider.getChildren] Total result items before filtering:', result.length);
+
+			const filtered = filterMap(result, r => {
 				if (!this.filters.itemIncluded(r)) {
 					return undefined;
 				}
@@ -642,6 +716,9 @@ class ChatRequestProvider extends Disposable implements vscode.TreeDataProvider<
 
 				return r;
 			});
+
+			console.log('[ChatRequestProvider.getChildren] Total result items after filtering:', filtered.length);
+			return filtered;
 		}
 	}
 

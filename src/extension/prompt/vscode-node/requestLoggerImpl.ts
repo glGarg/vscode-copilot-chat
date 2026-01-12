@@ -83,12 +83,20 @@ class LoggedElementInfo implements ILoggedElementInfo {
 
 class LoggedRequestInfo implements ILoggedRequestInfo {
 	public readonly kind = LoggedInfoKind.Request;
+	public readonly token: CapturingToken | undefined;
 
 	constructor(
 		public readonly id: string,
 		public readonly entry: LoggedRequest,
-		public readonly token: CapturingToken | undefined
-	) { }
+		token: CapturingToken | undefined
+	) {
+		// Create a defensive copy of the token to prevent it from being lost or modified
+		if (token) {
+			this.token = new CapturingToken(token.label, token.icon, token.flattenSingleChild, token.promoteMainEntry);
+		} else {
+			this.token = undefined;
+		}
+	}
 
 	toJSON(): object {
 		const baseInfo = {
@@ -300,6 +308,9 @@ export class RequestLogger extends AbstractRequestLogger {
 		const edits = this._workspaceEditRecorder?.getEditsAndReset();
 		// Extract toolMetadata from response if it exists
 		const toolMetadata = 'toolMetadata' in response ? (response as ExtendedLanguageModelToolResult).toolMetadata : undefined;
+		
+		this._logService.info(`[RequestLogger] logToolCall: id=${id}, name=${name}, token=${this.currentRequest?.label || 'none'}`);
+		
 		this._addEntry(new LoggedToolCall(
 			id,
 			name,
@@ -336,8 +347,16 @@ export class RequestLogger extends AbstractRequestLogger {
 	public addEntry(entry: LoggedRequest): void {
 		const id = generateUuid().substring(0, 8);
 		if (!this._shouldLog(entry)) {
+			this._logService.info(`[RequestLogger] addEntry SKIPPED (filtered): debugName=${entry.debugName}, type=${entry.type}, token=${this.currentRequest?.label || 'none'}`);
 			return;
 		}
+		this._logService.info(`[RequestLogger] addEntry: id=${id}, debugName=${entry.debugName}, type=${entry.type}, token=${this.currentRequest?.label || 'none'}`);
+		
+		// Debug: Check if currentRequest is undefined for subagent entries
+		if (entry.debugName === 'subagent-external' && !this.currentRequest) {
+			this._logService.warn(`[RequestLogger] ⚠️  WARNING: Adding subagent entry ${id} but currentRequest is UNDEFINED!`);
+		}
+		
 		this._addEntry(new LoggedRequestInfo(id, entry, this.currentRequest))
 			.then(ok => {
 				if (ok) {
@@ -387,6 +406,7 @@ export class RequestLogger extends AbstractRequestLogger {
 			this._logService.info(`Latest entry: ${ChatRequestScheme.buildUri({ kind: 'latest' })}`);
 		}
 
+		this._logService.info(`[RequestLogger] _addEntry: id=${entry.id}, kind=${entry.kind}, token=${entry.token?.label || 'none'}, total entries before: ${this._entries.length}`);
 
 		this._entries.push(entry);
 		const maxEntries = this._configService.getConfig(ConfigKey.Advanced.RequestLoggerMaxEntries);
@@ -394,6 +414,8 @@ export class RequestLogger extends AbstractRequestLogger {
 			this._entries.shift();
 		}
 		this._onDidChangeRequests.fire();
+		
+		this._logService.info(`[RequestLogger] _addEntry: total entries after: ${this._entries.length}`);
 		return true;
 	}
 

@@ -624,7 +624,11 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		};
 
 		const buildPromptResult = await this.buildPrompt(buildPromptContext, progress, token);
-		for (const metadata of buildPromptResult.metadata.getAll(ToolResultMetadata)) {
+		const toolResultMetadata = buildPromptResult.metadata.getAll(ToolResultMetadata);
+		this._logService.info(`[ToolCallingLoop] buildPrompt2: Found ${toolResultMetadata.length} ToolResultMetadata items`);
+		
+		for (const metadata of toolResultMetadata) {
+			this._logService.info(`[ToolCallingLoop] buildPrompt2: Processing ToolResultMetadata for tool call ID: ${metadata.toolCallId}`);
 			this.logToolResult(buildPromptContext, metadata);
 			this.toolCallResults[metadata.toolCallId] = metadata.result;
 		}
@@ -638,22 +642,52 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 
 
 	private logToolResult(buildPromptContext: IBuildPromptContext, metadata: ToolResultMetadata) {
+		this._logService.info(`[ToolCallingLoop] ========================================`);
+		this._logService.info(`[ToolCallingLoop] logToolResult called for tool call ID: ${metadata.toolCallId}`);
+		
 		if (this.toolCallResults[metadata.toolCallId]) {
+			this._logService.info(`[ToolCallingLoop] Tool call already logged, skipping`);
+			this._logService.info(`[ToolCallingLoop] ========================================`);
 			return; // already logged this on a previous turn
 		}
 
 		const lastTurn = this.toolCallRounds.at(-1);
+		this._logService.info(`[ToolCallingLoop] Last turn exists: ${!!lastTurn}`);
+		if (lastTurn) {
+			this._logService.info(`[ToolCallingLoop] Last turn tool calls count: ${lastTurn.toolCalls.length}`);
+			this._logService.info(`[ToolCallingLoop] Last turn tool call IDs: ${lastTurn.toolCalls.map(tc => tc.id).join(', ')}`);
+			this._logService.info(`[ToolCallingLoop] Last turn tool call names: ${lastTurn.toolCalls.map(tc => tc.name).join(', ')}`);
+		}
+		
 		let originalCall = lastTurn?.toolCalls.find(tc => tc.id === metadata.toolCallId);
+		this._logService.info(`[ToolCallingLoop] Found in lastTurn.toolCalls: ${!!originalCall}`);
+		
 		if (!originalCall) {
+			this._logService.info(`[ToolCallingLoop] Checking toolReferences...`);
+			this._logService.info(`[ToolCallingLoop] toolReferences available: ${!!buildPromptContext.tools?.toolReferences}`);
+			if (buildPromptContext.tools?.toolReferences) {
+				this._logService.info(`[ToolCallingLoop] toolReferences count: ${buildPromptContext.tools.toolReferences.length}`);
+				this._logService.info(`[ToolCallingLoop] toolReferences IDs: ${buildPromptContext.tools.toolReferences.map(r => r.id).join(', ')}`);
+			}
+			
 			const byRef = buildPromptContext.tools?.toolReferences.find(r => r.id === metadata.toolCallId);
+			this._logService.info(`[ToolCallingLoop] Found in toolReferences: ${!!byRef}`);
+			
 			if (byRef) {
 				originalCall = { id: byRef.id, arguments: JSON.stringify(byRef.input), name: byRef.name };
 			}
 		}
 
 		if (originalCall) {
+			this._logService.info(`[ToolCallingLoop] Logging tool call: ${originalCall.name} with ID: ${originalCall.id}`);
 			this._requestLogger.logToolCall(originalCall.id || generateUuid(), originalCall.name, originalCall.arguments, metadata.result, lastTurn?.thinking);
+			this._logService.info(`[ToolCallingLoop] Tool call logged successfully`);
+		} else {
+			this._logService.warn(`[ToolCallingLoop] ⚠️  WARNING: Could not find original tool call for ID: ${metadata.toolCallId}`);
+			this._logService.warn(`[ToolCallingLoop] ⚠️  Tool call will NOT be logged!`);
 		}
+		
+		this._logService.info(`[ToolCallingLoop] ========================================`);
 	}
 }
 

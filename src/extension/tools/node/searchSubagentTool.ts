@@ -38,6 +38,12 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 		// they have a simple query in sft data.
 		const searchInstruction = `Find relevant code snippets for: ${options.input.query}`;
 
+		console.log('[SearchSubagentTool] ========================================');
+		console.log('[SearchSubagentTool] INVOKE CALLED');
+		console.log('[SearchSubagentTool] ========================================');
+		console.log('[SearchSubagentTool] Query:', options.input.query);
+		console.log('[SearchSubagentTool] Description:', options.input.description);
+
 		const loop = this.instantiationService.createInstance(SubagentToolCallingLoop, {
 			toolCallLimit: 4,
 			conversation: new Conversation('', [new Turn('', { type: 'user', message: searchInstruction })]),
@@ -61,9 +67,14 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 			false
 		);
 
+		console.log('[SearchSubagentTool] Created CapturingToken with label:', searchSubagentToken.label);
+		console.log('[SearchSubagentTool] About to run loop with captureInvocation...');
+
 		// Wrap the loop execution in captureInvocation with the new token
 		// All nested tool calls will now be logged under this same CapturingToken
 		const loopResult = await this.requestLogger.captureInvocation(searchSubagentToken, () => loop.run(stream, token));
+
+		console.log('[SearchSubagentTool] Loop completed. Response type:', loopResult.response.type);
 
 		// Build subagent trajectory metadata that will be logged via toolMetadata
 		// All nested tool calls are already logged by ToolCallingLoop.logToolResult()
@@ -78,6 +89,10 @@ class SearchSubagentTool implements ICopilotTool<ISearchSubagentParams> {
 		} else {
 			subagentResponse = `The search subagent request failed with this message:\n${loopResult.response.type}: ${loopResult.response.reason}`;
 		}
+
+		console.log('[SearchSubagentTool] Subagent response length:', subagentResponse.length);
+		console.log('[SearchSubagentTool] Returning tool result');
+		console.log('[SearchSubagentTool] ========================================');
 
 		// toolMetadata will be automatically included in exportAllPromptLogsAsJsonCommand
 		const result = new ExtendedLanguageModelToolResult([new LanguageModelTextPart(subagentResponse)]);

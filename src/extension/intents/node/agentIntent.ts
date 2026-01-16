@@ -246,7 +246,9 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			this.logService.warn('[AgentIntent] search_subagent not found in available tools');
 		}
 		
-		return allTools;
+		// Always exclude the built-in runSubagent tool - we want the agent to use search_subagent instead
+		// The built-in runSubagent can cause hangs when VS Code tries to extract content from URIs
+		return allTools.filter(tool => tool.name !== ToolName.CoreRunSubagent);
 	}
 
 	override async buildPrompt(

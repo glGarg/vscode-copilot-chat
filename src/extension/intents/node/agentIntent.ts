@@ -248,7 +248,11 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		
 		// Always exclude the built-in runSubagent tool - we want the agent to use search_subagent instead
 		// The built-in runSubagent can cause hangs when VS Code tries to extract content from URIs
-		return allTools.filter(tool => tool.name !== ToolName.CoreRunSubagent);
+		// After search_subagent has been called once, also exclude it to prevent repeated calls
+		return allTools.filter(tool => 
+			tool.name !== ToolName.CoreRunSubagent && 
+			(tool.name !== ToolName.SearchSubagent || !this._hasCalledSearchSubagent)
+		);
 	}
 
 	override async buildPrompt(

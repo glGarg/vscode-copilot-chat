@@ -13,6 +13,7 @@ export enum ToolCategory {
 	WebInteraction = 'Web Interaction',
 	VSCodeInteraction = 'VS Code Interaction',
 	Testing = 'Testing',
+	Debugging = 'Debugging',
 	RedundantButSpecific = 'Redundant but Specific',
 	// Core tools that should not be grouped
 	Core = 'Core'
@@ -68,7 +69,13 @@ export enum ToolName {
 	CoreRunSubagent = 'runSubagent',
 	CoreConfirmationTool = 'vscode_get_confirmation',
 	CoreTerminalConfirmationTool = 'vscode_get_terminal_confirmation',
-	SearchSubagent = 'search_subagent'
+	SearchSubagent = 'search_subagent',
+	DebugSubagent = 'debug_subagent',
+	DebugStart = 'debug_start',
+	DebugBreakpoint = 'debug_breakpoint',
+	DebugControl = 'debug_control',
+	DebugInspect = 'debug_inspect',
+	DebugThreads = 'debug_threads'
 }
 
 export enum ContributedToolName {
@@ -215,6 +222,14 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.TestFailure]: ToolCategory.Testing,
 	[ToolName.FindTestFiles]: ToolCategory.Testing,
 	[ToolName.CoreRunTest]: ToolCategory.Testing,
+
+	// Debugging
+	[ToolName.DebugSubagent]: ToolCategory.Debugging,
+	[ToolName.DebugStart]: ToolCategory.Debugging,
+	[ToolName.DebugBreakpoint]: ToolCategory.Debugging,
+	[ToolName.DebugControl]: ToolCategory.Debugging,
+	[ToolName.DebugInspect]: ToolCategory.Debugging,
+	[ToolName.DebugThreads]: ToolCategory.Debugging,
 
 	// Redundant but Specific
 	[ToolName.DocInfo]: ToolCategory.RedundantButSpecific,

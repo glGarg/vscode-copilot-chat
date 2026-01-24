@@ -194,6 +194,234 @@
 				}
 			},
 			{
+				"name": "debug_subagent",
+				"toolReferenceName": "debugSubagent",
+				"displayName": "Debug Subagent",
+				"icon": "$(bug)",
+				"canBeReferencedInPrompt": true,
+				"userDescription": "Launch a debugging subagent to investigate Java issues using JDB",
+				"modelDescription": "Launch a debugging subagent specialized in Java debugging using JDB (Java Debugger). The subagent will:\n1. Build the project with debug symbols (detects Maven/Gradle/javac)\n2. Start a JDB debug session\n3. Set breakpoints based on the error/issue\n4. Step through code and inspect variables\n5. Report findings including root cause and suggested fix\n\nUse this tool when:\n- User reports a runtime exception (NullPointerException, IndexOutOfBoundsException, etc.)\n- User needs to understand why code behaves unexpectedly\n- User suspects a deadlock or threading issue\n- User wants to trace execution flow\n\nThe subagent has access to JDB tools (debug_start, debug_breakpoint, debug_control, debug_inspect, debug_threads) and terminal commands for building.\n\nInput fields:\n- task: Detailed description of what to debug, including error messages, stack traces, and suspected problem areas\n- description: Short user-visible message",
+				"tags": [
+					"debugging",
+					"java"
+				],
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"task": {
+							"type": "string",
+							"description": "Detailed description of the debugging task. Include: error messages, stack traces, file/line references, what behavior is expected vs actual, and any hypotheses about the cause."
+						},
+						"description": {
+							"type": "string",
+							"description": "Short user-visible message shown while the debug subagent runs."
+						}
+					},
+					"required": [
+						"task",
+						"description"
+					]
+				}
+			},
+			{
+				"name": "debug_start",
+				"toolReferenceName": "debugStart",
+				"displayName": "Debug Start",
+				"icon": "$(debug-start)",
+				"canBeReferencedInPrompt": false,
+				"userDescription": "Start a JDB debugging session",
+				"modelDescription": "Start or attach to a JDB (Java Debugger) session. Use 'launch' mode to start debugging a new Java process, or 'attach' mode to connect to an already running Java process with debug enabled.\n\nPrerequisites:\n- Project must be compiled with debug symbols (javac -g, or mvn/gradle compile)\n- For attach mode: target JVM must be started with -agentlib:jdwp=transport=dt_socket,server=y,address=<port>",
+				"tags": [
+					"debugging"
+				],
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"mode": {
+							"type": "string",
+							"enum": ["launch", "attach"],
+							"description": "'launch' to start a new JVM process, 'attach' to connect to a running JVM"
+						},
+						"mainClass": {
+							"type": "string",
+							"description": "Fully qualified main class name (required for launch mode)"
+						},
+						"port": {
+							"type": "number",
+							"description": "Debug port number (required for attach mode)"
+						},
+						"classpath": {
+							"type": "string",
+							"description": "Classpath for the application (e.g., 'target/classes' for Maven projects)"
+						},
+						"args": {
+							"type": "array",
+							"items": { "type": "string" },
+							"description": "Program arguments to pass to the main class"
+						},
+						"suspend": {
+							"type": "boolean",
+							"description": "Whether to suspend the JVM on start (default: true)"
+						}
+					},
+					"required": ["mode"]
+				}
+			},
+			{
+				"name": "debug_breakpoint",
+				"toolReferenceName": "debugBreakpoint",
+				"displayName": "Debug Breakpoint",
+				"icon": "$(debug-breakpoint)",
+				"canBeReferencedInPrompt": false,
+				"userDescription": "Manage JDB breakpoints",
+				"modelDescription": "Set, remove, list, enable, or disable breakpoints in a JDB session. Supports conditional breakpoints that only trigger when a condition is met.\n\nBreakpoint types:\n- Line breakpoints: stop at ClassName:lineNumber\n- Method breakpoints: stop in ClassName.methodName\n- Conditional: stop at ClassName:line if expression",
+				"tags": [
+					"debugging"
+				],
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {
+							"type": "string",
+							"enum": ["set", "remove", "list", "enable", "disable"],
+							"description": "Action to perform on breakpoints"
+						},
+						"className": {
+							"type": "string",
+							"description": "Fully qualified class name (e.g., 'com.example.MyClass')"
+						},
+						"line": {
+							"type": "number",
+							"description": "Line number for line breakpoint"
+						},
+						"method": {
+							"type": "string",
+							"description": "Method name for method breakpoint (alternative to line)"
+						},
+						"condition": {
+							"type": "string",
+							"description": "Conditional expression (e.g., 'i > 100' or 'name.equals(\"test\")')"
+						},
+						"hitCount": {
+							"type": "number",
+							"description": "Break only after this many hits"
+						},
+						"breakpointId": {
+							"type": "string",
+							"description": "Breakpoint ID (for remove/enable/disable actions)"
+						}
+					},
+					"required": ["action"]
+				}
+			},
+			{
+				"name": "debug_control",
+				"toolReferenceName": "debugControl",
+				"displayName": "Debug Control",
+				"icon": "$(debug-continue)",
+				"canBeReferencedInPrompt": false,
+				"userDescription": "Control JDB execution flow",
+				"modelDescription": "Control program execution in a JDB session. Actions:\n- run: Start program execution\n- continue: Resume execution until next breakpoint\n- step_into: Step into method calls\n- step_over: Step over method calls (stay in current method)\n- step_out: Step out of current method\n- pause: Suspend execution\n- terminate: End the debug session",
+				"tags": [
+					"debugging"
+				],
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {
+							"type": "string",
+							"enum": ["run", "continue", "step_into", "step_over", "step_out", "pause", "terminate"],
+							"description": "Execution control action"
+						},
+						"threadId": {
+							"type": "string",
+							"description": "Thread ID to control (optional, defaults to current thread)"
+						}
+					},
+					"required": ["action"]
+				}
+			},
+			{
+				"name": "debug_inspect",
+				"toolReferenceName": "debugInspect",
+				"displayName": "Debug Inspect",
+				"icon": "$(debug-variables)",
+				"canBeReferencedInPrompt": false,
+				"userDescription": "Inspect program state in JDB",
+				"modelDescription": "Inspect program state during debugging. Actions:\n- locals: Show all local variables in current stack frame\n- eval: Evaluate an expression (e.g., 'myList.size()', 'x + y')\n- stack: Show the current call stack (stack trace)\n- this: Inspect the 'this' object\n- fields: Show fields of an object",
+				"tags": [
+					"debugging"
+				],
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {
+							"type": "string",
+							"enum": ["locals", "eval", "stack", "this", "fields"],
+							"description": "Inspection action"
+						},
+						"expression": {
+							"type": "string",
+							"description": "Expression to evaluate (required for 'eval' action)"
+						},
+						"objectId": {
+							"type": "string",
+							"description": "Object ID to inspect fields of"
+						},
+						"maxDepth": {
+							"type": "number",
+							"description": "How deep to expand nested objects (default: 2)"
+						},
+						"maxStringLength": {
+							"type": "number",
+							"description": "Truncate strings longer than this (default: 100)"
+						}
+					},
+					"required": ["action"]
+				}
+			},
+			{
+				"name": "debug_threads",
+				"toolReferenceName": "debugThreads",
+				"displayName": "Debug Threads",
+				"icon": "$(debug-stackframe)",
+				"canBeReferencedInPrompt": false,
+				"userDescription": "Manage threads in JDB",
+				"modelDescription": "Manage and inspect threads in a JDB session. Useful for debugging multi-threaded applications and diagnosing deadlocks.\n\nActions:\n- list: Show all threads and their states\n- switch: Switch debugger context to a different thread\n- suspend: Pause a specific thread\n- resume: Resume a specific thread\n- stack_all: Get stack traces for ALL threads (useful for deadlock detection)",
+				"tags": [
+					"debugging"
+				],
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {
+							"type": "string",
+							"enum": ["list", "switch", "suspend", "resume", "stack_all"],
+							"description": "Thread management action"
+						},
+						"threadId": {
+							"type": "string",
+							"description": "Thread ID (required for switch/suspend/resume)"
+						},
+						"filter": {
+							"type": "object",
+							"properties": {
+								"state": {
+									"type": "string",
+									"enum": ["running", "waiting", "blocked", "all"],
+									"description": "Filter threads by state"
+								},
+								"excludeSystem": {
+									"type": "boolean",
+									"description": "Exclude system threads like GC, Finalizer (default: true)"
+								}
+							}
+						}
+					},
+					"required": ["action"]
+				}
+			},
+			{
 				"name": "runSubagent",
 				"toolReferenceName": "runSubagent",
 				"displayName": "%copilot.tools.runSubagent.name%",

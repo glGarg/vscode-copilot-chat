@@ -208,6 +208,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 	private _resolvedCustomizations: AgentPromptCustomizations | undefined;
 
 	private _hasCalledSearchSubagent = false;
+	private _hasCalledDebugSubagent = false;
 
 	constructor(
 		intent: IIntent,
@@ -245,13 +246,25 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			// If search_subagent is not available, fall through to return all tools
 			this.logService.warn('[AgentIntent] search_subagent not found in available tools');
 		}
+
+		// On the second call (after search_subagent), only provide debug_subagent
+		if (this._hasCalledSearchSubagent && !this._hasCalledDebugSubagent) {
+			const debugSubagentTool = allTools.find(tool => tool.name === ToolName.DebugSubagent);
+			if (debugSubagentTool) {
+				this.logService.info('[AgentIntent] Second tool call - forcing debug_subagent only');
+				return [debugSubagentTool];
+			}
+			// If debug_subagent is not available, fall through to return all tools
+			this.logService.warn('[AgentIntent] debug_subagent not found in available tools');
+		}
 		
 		// Always exclude the built-in runSubagent tool - we want the agent to use search_subagent instead
 		// The built-in runSubagent can cause hangs when VS Code tries to extract content from URIs
-		// After search_subagent has been called once, also exclude it to prevent repeated calls
+		// After subagents have been called, exclude them to prevent repeated calls
 		return allTools.filter(tool => 
 			tool.name !== ToolName.CoreRunSubagent && 
-			(tool.name !== ToolName.SearchSubagent || !this._hasCalledSearchSubagent)
+			(tool.name !== ToolName.SearchSubagent || !this._hasCalledSearchSubagent) &&
+			(tool.name !== ToolName.DebugSubagent || !this._hasCalledDebugSubagent)
 		);
 	}
 
@@ -264,8 +277,19 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		if (!this._hasCalledSearchSubagent && promptContext.toolCallRounds) {
 			for (const round of promptContext.toolCallRounds) {
 				if (round.toolCalls.some(call => call.name === ToolName.SearchSubagent)) {
-					this.logService.info('[AgentIntent] Detected search_subagent call - enabling all tools');
+					this.logService.info('[AgentIntent] Detected search_subagent call - enabling debug_subagent');
 					this._hasCalledSearchSubagent = true;
+					break;
+				}
+			}
+		}
+
+		// Check if debug_subagent has been called in any previous rounds
+		if (!this._hasCalledDebugSubagent && promptContext.toolCallRounds) {
+			for (const round of promptContext.toolCallRounds) {
+				if (round.toolCalls.some(call => call.name === ToolName.DebugSubagent)) {
+					this.logService.info('[AgentIntent] Detected debug_subagent call - enabling all tools');
+					this._hasCalledDebugSubagent = true;
 					break;
 				}
 			}
@@ -310,6 +334,9 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 				tools: promptContext.tools && {
 					...promptContext.tools,
 					toolReferences: this.stableToolReferences.filter((r) => r.name !== ToolName.Codebase),
+					// Override availableTools to match the restricted tools returned by getAvailableTools()
+					// This ensures the prompt instructions reflect the actual tools available
+					availableTools: tools,
 				}
 			},
 			location: this.location,

@@ -28,6 +28,8 @@ function getCategorySummary(category: ToolCategory): string {
 			return 'Call tools from this group when you need to interact with the VS Code workspace and access VS Code features.';
 		case ToolCategory.Testing:
 			return 'Call tools from this group when you need to run tests, analyze test failures, and manage test workflows.';
+		case ToolCategory.Debugging:
+			return 'Call tools from this group when you need to debug Java applications using JDB - set breakpoints, step through code, inspect variables, and manage threads.';
 		case ToolCategory.RedundantButSpecific: {
 			const toolNames = getToolsForCategory(category);
 			return `These tools have overlapping functionalities but are highly specialized for certain tasks. Tools: ${toolNames.join(', ')}`;

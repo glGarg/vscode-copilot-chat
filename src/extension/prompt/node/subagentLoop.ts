@@ -115,8 +115,7 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 		// Log available models for debugging
 		await this.logAvailableModels();
 
-		// Define the model to use for search subagent
-		// This should match a model configured in github.copilot.chat.customOAIModels setting
+		// Define the model to use for subagent - using qwen3-coder-30b from customoai
 		const modelSelector = {
 			vendor: 'customoai',
 			id: 'qwen3-coder-30b-a3b-instruct'
@@ -129,7 +128,7 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 			const models = await vscode.lm.selectChatModels(modelSelector);
 			
 			if (!models || models.length === 0) {
-				const errorMsg = `No models found matching selector: ${JSON.stringify(modelSelector)}. Ensure the model is configured in github.copilot.chat.customOAIModels setting.`;
+				const errorMsg = `No models found matching selector: ${JSON.stringify(modelSelector)}. Available models may not include this family.`;
 				this._logService.error(`[SubagentToolCallingLoop] ${errorMsg}`);
 				throw new Error(errorMsg);
 			}
@@ -158,7 +157,7 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 			});
 			
 			if (!endpoint.supportsToolCalls) {
-				const errorMsg = `Selected model ${qwenModel.id} does not support tool calls, which is required for search subagent`;
+				const errorMsg = `Selected model ${qwenModel.id} does not support tool calls, which is required for subagent`;
 				this._logService.error(`[SubagentToolCallingLoop] ${errorMsg}`);
 				throw new Error(errorMsg);
 			}
@@ -174,7 +173,7 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 			this._logService.error('[SubagentToolCallingLoop] Error message:', error instanceof Error ? error.message : String(error));
 			this._logService.error('[SubagentToolCallingLoop] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
 			this._logService.error('[SubagentToolCallingLoop] ========================================');
-			throw new Error(`Failed to get endpoint for search subagent with model ${modelSelector.id}: ${error instanceof Error ? error.message : String(error)}`);
+			throw new Error(`Failed to get endpoint for subagent with model ${modelSelector.id}: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 

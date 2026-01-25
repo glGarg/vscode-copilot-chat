@@ -207,9 +207,6 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 
 	private _resolvedCustomizations: AgentPromptCustomizations | undefined;
 
-	private _hasCalledSearchSubagent = false;
-	private _hasCalledDebugSubagent = false;
-
 	constructor(
 		intent: IIntent,
 		location: ChatLocation,
@@ -236,36 +233,24 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 	public override async getAvailableTools(): Promise<vscode.LanguageModelToolInformation[]> {
 		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.request);
 		
-		// On the first call, only provide search_subagent to force its usage
-		if (!this._hasCalledSearchSubagent) {
-			const searchSubagentTool = allTools.find(tool => tool.name === ToolName.SearchSubagent);
-			if (searchSubagentTool) {
-				this.logService.info('[AgentIntent] First tool call - forcing search_subagent only');
-				return [searchSubagentTool];
-			}
-			// If search_subagent is not available, fall through to return all tools
-			this.logService.warn('[AgentIntent] search_subagent not found in available tools');
-		}
-
-		// On the second call (after search_subagent), only provide debug_subagent
-		if (this._hasCalledSearchSubagent && !this._hasCalledDebugSubagent) {
-			const debugSubagentTool = allTools.find(tool => tool.name === ToolName.DebugSubagent);
-			if (debugSubagentTool) {
-				this.logService.info('[AgentIntent] Second tool call - forcing debug_subagent only');
-				return [debugSubagentTool];
-			}
-			// If debug_subagent is not available, fall through to return all tools
-			this.logService.warn('[AgentIntent] debug_subagent not found in available tools');
-		}
+		// Only provide essential tools for bug fixing - smaller set makes debug_subagent more prominent
+		const allowedTools = new Set([
+			// The debug subagent - MUST be used
+			ToolName.DebugSubagent,
+			// Context gathering
+			ToolName.ReadFile,
+			ToolName.FindFiles,
+			ToolName.FindTextInFiles,
+			ToolName.ListDir,
+			// Editing
+			ToolName.ReplaceString,
+			ToolName.CreateFile,
+			ToolName.EditFile,
+			// Terminal for building/testing
+			ToolName.CoreRunInTerminal,
+		]);
 		
-		// Always exclude the built-in runSubagent tool - we want the agent to use search_subagent instead
-		// The built-in runSubagent can cause hangs when VS Code tries to extract content from URIs
-		// After subagents have been called, exclude them to prevent repeated calls
-		return allTools.filter(tool => 
-			tool.name !== ToolName.CoreRunSubagent && 
-			(tool.name !== ToolName.SearchSubagent || !this._hasCalledSearchSubagent) &&
-			(tool.name !== ToolName.DebugSubagent || !this._hasCalledDebugSubagent)
-		);
+		return allTools.filter(tool => allowedTools.has(tool.name as ToolName));
 	}
 
 	override async buildPrompt(
@@ -273,28 +258,6 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		progress: vscode.Progress<vscode.ChatResponseReferencePart | vscode.ChatResponseProgressPart>,
 		token: vscode.CancellationToken
 	): Promise<IBuildPromptResult> {
-		// Check if search_subagent has been called in any previous rounds
-		if (!this._hasCalledSearchSubagent && promptContext.toolCallRounds) {
-			for (const round of promptContext.toolCallRounds) {
-				if (round.toolCalls.some(call => call.name === ToolName.SearchSubagent)) {
-					this.logService.info('[AgentIntent] Detected search_subagent call - enabling debug_subagent');
-					this._hasCalledSearchSubagent = true;
-					break;
-				}
-			}
-		}
-
-		// Check if debug_subagent has been called in any previous rounds
-		if (!this._hasCalledDebugSubagent && promptContext.toolCallRounds) {
-			for (const round of promptContext.toolCallRounds) {
-				if (round.toolCalls.some(call => call.name === ToolName.DebugSubagent)) {
-					this.logService.info('[AgentIntent] Detected debug_subagent call - enabling all tools');
-					this._hasCalledDebugSubagent = true;
-					break;
-				}
-			}
-		}
-
 		this._resolvedCustomizations = await PromptRegistry.resolveAllCustomizations(this.instantiationService, this.endpoint);
 		// Add any references from the codebase invocation to the request
 		const codebase = await this._getCodebaseReferences(promptContext, token);
@@ -334,9 +297,6 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 				tools: promptContext.tools && {
 					...promptContext.tools,
 					toolReferences: this.stableToolReferences.filter((r) => r.name !== ToolName.Codebase),
-					// Override availableTools to match the restricted tools returned by getAvailableTools()
-					// This ensures the prompt instructions reflect the actual tools available
-					availableTools: tools,
 				}
 			},
 			location: this.location,

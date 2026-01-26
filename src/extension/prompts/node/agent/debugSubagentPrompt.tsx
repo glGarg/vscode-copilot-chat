@@ -29,8 +29,11 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 		const currentTurn = toolCallRounds?.length ?? 0;
 		const isLastTurn = currentTurn >= MAX_DEBUG_TURNS - 1;
 
-		// Check if debug_start has been called
-		const hasStartedDebugSession = toolCallResults?.some(r => r.name === 'debug_start');
+		// Check if debug_start has been called - look at toolCallRounds for tool names
+		// toolCallResults keys are toolCallIds (UUIDs), not tool names, so we need to check toolCallRounds
+		const hasStartedDebugSession = toolCallRounds?.some(round => 
+			round.toolCalls?.some(tc => tc.name === 'debug_start')
+		) ?? false;
 
 		return (
 			<>

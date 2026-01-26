@@ -8,7 +8,7 @@ import { GenericBasePromptElementProps } from '../../../context/node/resolvers/g
 import { CopilotToolMode } from '../../../tools/common/toolsRegistry';
 import { ChatToolCalls } from '../panel/toolCalling';
 
-const MAX_DEBUG_TURNS = 15;
+const MAX_DEBUG_TURNS = 35;
 
 /**
  * Prompt for the debug subagent that guides JDB debugging sessions.
@@ -29,18 +29,14 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 		const currentTurn = toolCallRounds?.length ?? 0;
 		const isLastTurn = currentTurn >= MAX_DEBUG_TURNS - 1;
 
-		// Check if debug_start has been called - look at toolCallRounds for tool names
-		// toolCallResults keys are toolCallIds (UUIDs), not tool names, so we need to check toolCallRounds
-		const hasStartedDebugSession = toolCallRounds?.some(round => 
-			round.toolCalls?.some(tc => tc.name === 'debug_start')
-		) ?? false;
-
 		return (
 			<>
 				<SystemMessage priority={1000}>
 					You are an AI debugging assistant specialized in Java debugging using JDB (Java Debugger).<br />
 					<br />
 					**CRITICAL**: You MUST call debug_start to start a JDB session. Do NOT just analyze code - you must actually run the debugger!<br />
+					<br />
+					**CRITICAL**: You MUST report your findings using the &lt;debug_findings&gt; tag when you have completed your investigation. Always produce a &lt;debug_findings&gt; response with your conclusions.<br />
 					<br />
 					Your workflow should be:<br />
 					1. **Build the project** - Detect the build system and compile with debug symbols<br />
@@ -78,7 +74,9 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					```<br />
 					Then use debug_start with mainClass="DebugMain".<br />
 					<br />
-					## Output Format<br />
+					## Output Format (REQUIRED)<br />
+					<br />
+					You must always end your investigation with a &lt;debug_findings&gt; response:<br />
 					<br />
 					&lt;debug_findings&gt;<br />
 					**Issue**: [Brief description]<br />
@@ -97,12 +95,6 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					toolCallResults={toolCallResults}
 					toolCallMode={CopilotToolMode.FullContext}
 				/>
-				{!hasStartedDebugSession && currentTurn > 3 && (
-					<SystemMessage priority={897}>
-						REMINDER: You have NOT started a JDB debug session yet. You MUST call debug_start before providing findings.
-						If there is no existing test, create a simple test class first, then call debug_start.
-					</SystemMessage>
-				)}
 				{isLastTurn && (
 					<AssistantMessage priority={898}>
 						I have completed my debugging investigation. Here are my findings:

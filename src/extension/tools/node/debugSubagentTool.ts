@@ -62,7 +62,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		]);
 
 		const loop = this.instantiationService.createInstance(SubagentToolCallingLoop, {
-			toolCallLimit: 15, // Allow more iterations for debugging workflows
+			toolCallLimit: 35, // Allow more iterations for debugging workflows
 			conversation: new Conversation('', [new Turn('', { type: 'user', message: debugInstruction })]),
 			request: this._inputContext!.request!,
 			location: this._inputContext!.request!.location,

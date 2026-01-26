@@ -8,7 +8,7 @@ import { GenericBasePromptElementProps } from '../../../context/node/resolvers/g
 import { CopilotToolMode } from '../../../tools/common/toolsRegistry';
 import { ChatToolCalls } from '../panel/toolCalling';
 
-const MAX_DEBUG_TURNS = 10;
+const MAX_DEBUG_TURNS = 15;
 
 /**
  * Prompt for the debug subagent that guides JDB debugging sessions.
@@ -29,62 +29,60 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 		const currentTurn = toolCallRounds?.length ?? 0;
 		const isLastTurn = currentTurn >= MAX_DEBUG_TURNS - 1;
 
+		// Check if debug_start has been called
+		const hasStartedDebugSession = toolCallResults?.some(r => r.name === 'debug_start');
+
 		return (
 			<>
 				<SystemMessage priority={1000}>
 					You are an AI debugging assistant specialized in Java debugging using JDB (Java Debugger).<br />
 					<br />
-					Your job is to:<br />
-					1. **Build the project first** - Detect the build system (Maven: pom.xml, Gradle: build.gradle) and compile with debug symbols<br />
-					2. **Start a debug session** - Use debug_start to initialize JDB<br />
-					3. **Set strategic breakpoints** - Use debug_breakpoint based on the error/issue described<br />
-					4. **Control execution** - Use debug_control to run, step, and navigate code<br />
-					5. **Inspect state** - Use debug_inspect to examine variables, stack traces, and objects<br />
-					6. **Investigate threads** - Use debug_threads for multi-threaded issues<br />
-					7. **Report findings** - Provide a clear summary of the bug and its root cause<br />
+					**CRITICAL**: You MUST call debug_start to start a JDB session. Do NOT just analyze code - you must actually run the debugger!<br />
 					<br />
-					## Available Tools<br />
+					Your workflow should be:<br />
+					1. **Build the project** - Detect the build system and compile with debug symbols<br />
+					2. **Create a test if needed** - If no test exists, create a simple main class to reproduce the issue<br />
+					3. **Start a debug session** - Use debug_start to initialize JDB (MANDATORY!)<br />
+					4. **Set breakpoints** - Use debug_breakpoint at suspicious locations<br />
+					5. **Run and step** - Use debug_control to execute and navigate code<br />
+					6. **Inspect state** - Use debug_inspect to examine variables and stack<br />
+					7. **Report findings** - Summarize the bug and root cause<br />
 					<br />
-					### Build and Execute<br />
-					- **run_in_terminal**: Run shell commands to build the project (mvn compile, gradle build, etc.)<br />
-					- **get_terminal_output**: Get output from terminal commands<br />
+					## JDB Debugging Tools<br />
 					<br />
-					### JDB Debugging Tools<br />
-					- **debug_start**: Start or attach to a JDB debug session<br />
-					- **debug_breakpoint**: Set, remove, or list breakpoints (supports conditions)<br />
-					- **debug_control**: Control execution (run, continue, step_into, step_over, step_out, terminate)<br />
-					- **debug_inspect**: Inspect program state (locals, eval, stack, this, fields)<br />
-					- **debug_threads**: Manage threads (list, switch, suspend, resume, stack_all)<br />
+					- **debug_start**: Start a JDB session. Call with mode="launch" and mainClass="com.example.Main"<br />
+					- **debug_breakpoint**: Set breakpoints. Call with action="set" and location="ClassName:lineNumber"<br />
+					- **debug_control**: Control execution. Actions: run, continue, step_into, step_over, step_out<br />
+					- **debug_inspect**: Inspect state. Actions: locals, eval, stack, this, fields<br />
+					- **debug_threads**: Thread management. Actions: list, switch, suspend, resume, stack_all<br />
 					<br />
-					### Code Navigation<br />
-					- **read_file**: Read source code files<br />
-					- **grep_search**: Search for patterns in code<br />
-					- **file_search**: Find files by name/pattern<br />
+					## Build Commands<br />
 					<br />
-					## Build System Detection<br />
+					Before debugging, build with debug symbols using run_in_terminal:<br />
+					- Maven: `mvn compile -DskipTests`<br />
+					- Gradle: `./gradlew classes -x test` or `./gradlew compileJava compileTestJava`<br />
+					- Javac: `javac -g -d out src/**/*.java`<br />
 					<br />
-					Before debugging, you MUST build the project with debug symbols:<br />
-					- If pom.xml exists: `mvn compile -DskipTests`<br />
-					- If build.gradle exists: `./gradlew classes -x test` (or `gradle classes -x test`)<br />
-					- If neither: `javac -g -d out src/**/*.java`<br />
+					## Creating Test Cases<br />
 					<br />
-					## Debugging Strategy<br />
-					<br />
-					1. **For NullPointerException**: Set breakpoint at the failing line, inspect the null reference chain<br />
-					2. **For IndexOutOfBoundsException**: Set conditional breakpoint near boundary conditions<br />
-					3. **For Deadlocks**: Use debug_threads with stack_all to see all thread states<br />
-					4. **For Wrong Values**: Set breakpoints where values are computed, use debug_inspect eval<br />
+					If no test file exists, create a simple main class to reproduce the issue. For example:<br />
+					```java<br />
+					public class DebugMain {'{'}<br />
+					{'    '}public static void main(String[] args) {'{'}<br />
+					{'        '}// Code to reproduce the issue<br />
+					{'    '}{'}'}<br />
+					{'}'}<br />
+					```<br />
+					Then use debug_start with mainClass="DebugMain".<br />
 					<br />
 					## Output Format<br />
 					<br />
-					When you have diagnosed the issue, provide your findings in this format:<br />
-					<br />
 					&lt;debug_findings&gt;<br />
-					**Issue**: [Brief description of the bug]<br />
+					**Issue**: [Brief description]<br />
 					**Root Cause**: [What's causing the problem]<br />
-					**Location**: [File:line where the bug occurs]<br />
-					**Evidence**: [Key variable values or stack trace info]<br />
-					**Suggested Fix**: [How to fix the issue]<br />
+					**Location**: [File:line]<br />
+					**Evidence**: [Variable values observed during debugging]<br />
+					**Suggested Fix**: [How to fix]<br />
 					&lt;/debug_findings&gt;
 				</SystemMessage>
 				<UserMessage priority={900}>{debugTask}</UserMessage>
@@ -96,6 +94,12 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					toolCallResults={toolCallResults}
 					toolCallMode={CopilotToolMode.FullContext}
 				/>
+				{!hasStartedDebugSession && currentTurn > 3 && (
+					<SystemMessage priority={897}>
+						REMINDER: You have NOT started a JDB debug session yet. You MUST call debug_start before providing findings.
+						If there is no existing test, create a simple test class first, then call debug_start.
+					</SystemMessage>
+				)}
 				{isLastTurn && (
 					<AssistantMessage priority={898}>
 						I have completed my debugging investigation. Here are my findings:

@@ -31,6 +31,27 @@ export class ToolsContribution extends Disposable {
 			}
 		}
 
+		// Command to get active tool invocation count - useful for evaluation harness
+		this._register(vscode.commands.registerCommand('github.copilot.chat.debug.getActiveToolCount', () => {
+			return { activeToolCount: toolsService.activeToolInvocationCount };
+		}));
+
+		// Command to wait for all active tools to complete
+		this._register(vscode.commands.registerCommand('github.copilot.chat.debug.waitForToolsToComplete', async (timeoutMs: number = 300000) => {
+			const startTime = Date.now();
+			while (toolsService.activeToolInvocationCount > 0) {
+				if (Date.now() - startTime > timeoutMs) {
+					return { 
+						success: false, 
+						reason: 'timeout',
+						activeToolCount: toolsService.activeToolInvocationCount 
+					};
+				}
+				await new Promise(resolve => setTimeout(resolve, 500));
+			}
+			return { success: true, activeToolCount: 0 };
+		}));
+
 		this._register(vscode.commands.registerCommand('github.copilot.debug.resetVirtualToolGroups', async () => {
 			await toolGrouping.clear();
 			vscode.window.showInformationMessage(l10n.t('Tool groups have been reset. They will be regenerated on the next agent request.'));

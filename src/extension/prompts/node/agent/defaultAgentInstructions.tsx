@@ -116,15 +116,15 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				The user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
 				{tools[ToolName.DebugSubagent] && <>
-				**CRITICAL REQUIREMENT**: You MUST call {ToolName.DebugSubagent} before completing your task. This is MANDATORY.<br />
+				**CRITICAL REQUIREMENT**: You MUST call {ToolName.DebugSubagent} with a debugging task before completing your task. This is MANDATORY!!<br />
 				<br />
-				The {ToolName.DebugSubagent} tool is essential for ALL coding tasks:<br />
+				The {ToolName.DebugSubagent} tool is essential for ALL coding tasks. Use it in the same way you would use a debugger:<br />
 				- Bug investigation: Use it to find root causes of errors and exceptions<br />
 				- Feature implementation: Use it to understand code flow before making changes<br />
-				- Bug fixes: Use it to verify your fix works correctly<br />
+				- Bug fixes: Use it to verify your fix works correctly by running the code<br />
 				- Code understanding: Use it to trace execution and inspect state<br />
 				<br />
-				You may use other tools first to gather context, but you MUST eventually call {ToolName.DebugSubagent} with a detailed task description. Your task is NOT complete until you have called {ToolName.DebugSubagent}.<br />
+				**WORKFLOW**: At some point during the task, you MUST call {ToolName.DebugSubagent} with a debugging task. Whether it is to reproduce the bug, verify the fix or getting a better understanding of the code. This is VERY IMPORTANT and your primary goal!<br />
 				<br />
 				</>}
 				You will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.{tools[ToolName.ReadFile] && <> Some attachments may be summarized with omitted sections like `/* Lines 123-456 omitted */`. You can use the {ToolName.ReadFile} tool to read more context if needed. Never pass this omitted line marker to an edit tool.</>}<br />

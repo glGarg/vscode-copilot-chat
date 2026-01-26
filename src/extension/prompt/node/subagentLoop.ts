@@ -21,6 +21,7 @@ import { PromptElementCtor } from '../../prompts/node/base/promptElement';
 import { PromptRenderer } from '../../prompts/node/base/promptRenderer';
 import { ToolName } from '../../tools/common/toolNames';
 import { normalizeToolSchema } from '../../tools/common/toolSchemaNormalizer';
+import { IToolsService } from '../../tools/common/toolsService';
 import { ChatVariablesCollection } from '../common/chatVariablesCollection';
 import { IBuildPromptContext } from '../common/intents';
 import { IBuildPromptResult } from './intents';
@@ -115,40 +116,26 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 		// Log available models for debugging
 		await this.logAvailableModels();
 
-		// Define the model to use for subagent - using qwen3-coder-30b from customoai
-		const modelSelector = {
-			vendor: 'customoai',
-			id: 'qwen3-coder-30b-a3b-instruct'
-		};
+		// Use the same model as the main agent request
+		// This ensures the subagent uses whatever model the user has selected (e.g., gpt-5)
+		const requestModel = request.model;
 		
-		this._logService.info('[SubagentToolCallingLoop] Attempting to select model:', JSON.stringify(modelSelector, null, 2));
+		this._logService.info('[SubagentToolCallingLoop] Using same model as main request:', JSON.stringify({
+			vendor: requestModel.vendor,
+			id: requestModel.id,
+			name: requestModel.name,
+			family: requestModel.family,
+			hasCapabilities: !!requestModel.capabilities,
+			supportsToolCalling: requestModel.capabilities?.supportsToolCalling
+		}, null, 2));
 		
 		try {
-			// Use vscode.lm.selectChatModels to get the actual registered model
-			const models = await vscode.lm.selectChatModels(modelSelector);
-			
-			if (!models || models.length === 0) {
-				const errorMsg = `No models found matching selector: ${JSON.stringify(modelSelector)}. Available models may not include this family.`;
-				this._logService.error(`[SubagentToolCallingLoop] ${errorMsg}`);
-				throw new Error(errorMsg);
-			}
-			
-			const qwenModel = models[0];
-			this._logService.info('[SubagentToolCallingLoop] Selected model from VS Code:', JSON.stringify({
-				vendor: qwenModel.vendor,
-				id: qwenModel.id,
-				name: qwenModel.name,
-				family: qwenModel.family,
-				hasCapabilities: !!qwenModel.capabilities,
-				supportsToolCalling: qwenModel.capabilities?.supportsToolCalling
-			}, null, 2));
-			
-			// Pass the actual registered model to getChatEndpoint
-			const endpoint = await this.endpointProvider.getChatEndpoint(qwenModel);
+			// Pass the request's model directly to getChatEndpoint
+			const endpoint = await this.endpointProvider.getChatEndpoint(requestModel);
 			
 			this._logService.info('[SubagentToolCallingLoop] Successfully selected endpoint:', {
-				requestedModelId: modelSelector.id,
-				requestedModelVendor: modelSelector.vendor,
+				modelId: requestModel.id,
+				modelVendor: requestModel.vendor,
 				endpointModel: endpoint.model,
 				endpointFamily: endpoint.family,
 				supportsToolCalls: endpoint.supportsToolCalls,
@@ -157,7 +144,7 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 			});
 			
 			if (!endpoint.supportsToolCalls) {
-				const errorMsg = `Selected model ${qwenModel.id} does not support tool calls, which is required for subagent`;
+				const errorMsg = `Selected model ${requestModel.id} does not support tool calls, which is required for subagent`;
 				this._logService.error(`[SubagentToolCallingLoop] ${errorMsg}`);
 				throw new Error(errorMsg);
 			}
@@ -168,7 +155,7 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 			this._logService.error('[SubagentToolCallingLoop] ========================================');
 			this._logService.error('[SubagentToolCallingLoop] FAILED TO GET ENDPOINT');
 			this._logService.error('[SubagentToolCallingLoop] ========================================');
-			this._logService.error('[SubagentToolCallingLoop] Requested model selector:', JSON.stringify(modelSelector, null, 2));
+			this._logService.error('[SubagentToolCallingLoop] Request model:', JSON.stringify({ id: requestModel.id, vendor: requestModel.vendor }, null, 2));
 			this._logService.error('[SubagentToolCallingLoop] Error type:', error?.constructor?.name);
 			this._logService.error('[SubagentToolCallingLoop] Error message:', error instanceof Error ? error.message : String(error));
 			this._logService.error('[SubagentToolCallingLoop] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
@@ -198,8 +185,28 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.options.request);
 
 		if (this.options.allowedTools) {
-			// If allowedTools is specified, only include those tools
-			return allTools.filter(tool => this.options.allowedTools!.has(tool.name as ToolName));
+			// If allowedTools is specified, get those tools directly from toolsService
+			// This bypasses the "enabled" check to allow debug tools that aren't in the tool picker
+			const toolsService = this.instantiationService.invokeFunction(accessor => accessor.get<IToolsService>(IToolsService));
+			const tools: LanguageModelToolInformation[] = [];
+			
+			for (const toolName of this.options.allowedTools) {
+				// First try to get from allTools (already filtered/enabled tools)
+				const fromAllTools = allTools.find(t => t.name === toolName);
+				if (fromAllTools) {
+					tools.push(fromAllTools);
+				} else {
+					// If not in allTools, try to get directly from toolsService
+					const directTool = toolsService.getTool(toolName);
+					if (directTool) {
+						tools.push(directTool);
+					} else {
+						this._logService.warn(`[SubagentToolCallingLoop] Tool ${toolName} not found in toolsService`);
+					}
+				}
+			}
+			
+			return tools;
 		} else {
 			// Default behavior: exclude certain tools
 			const excludedTools = new Set([ToolName.CoreRunSubagent, ToolName.CoreManageTodoList]);

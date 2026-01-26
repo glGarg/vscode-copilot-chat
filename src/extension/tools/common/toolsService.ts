@@ -44,10 +44,21 @@ export interface IOnWillInvokeToolEvent {
 	toolName: string;
 }
 
+export interface IOnDidInvokeToolEvent {
+	toolName: string;
+	success: boolean;
+}
+
 export interface IToolsService {
 	readonly _serviceBrand: undefined;
 
 	onWillInvokeTool: Event<IOnWillInvokeToolEvent>;
+	onDidInvokeTool: Event<IOnDidInvokeToolEvent>;
+
+	/**
+	 * Returns the number of currently active tool invocations
+	 */
+	activeToolInvocationCount: number;
 
 	/**
 	 * All registered LanguageModelToolInformations (vscode.lm.tools)
@@ -157,6 +168,15 @@ export abstract class BaseToolsService extends Disposable implements IToolsServi
 
 	protected readonly _onWillInvokeTool = this._register(new Emitter<IOnWillInvokeToolEvent>());
 	public get onWillInvokeTool() { return this._onWillInvokeTool.event; }
+
+	protected readonly _onDidInvokeTool = this._register(new Emitter<IOnDidInvokeToolEvent>());
+	public get onDidInvokeTool() { return this._onDidInvokeTool.event; }
+
+	private _activeToolInvocationCount = 0;
+	public get activeToolInvocationCount() { return this._activeToolInvocationCount; }
+
+	protected incrementActiveToolCount() { this._activeToolInvocationCount++; }
+	protected decrementActiveToolCount() { this._activeToolInvocationCount = Math.max(0, this._activeToolInvocationCount - 1); }
 
 	abstract tools: ReadonlyArray<vscode.LanguageModelToolInformation>;
 	abstract copilotTools: ReadonlyMap<ToolName, ICopilotTool<unknown>>;

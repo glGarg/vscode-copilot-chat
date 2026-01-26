@@ -78,8 +78,24 @@ export class ToolsService extends BaseToolsService {
 	}
 
 	invokeTool(name: string | ToolName, options: vscode.LanguageModelToolInvocationOptions<Object>, token: vscode.CancellationToken): Thenable<vscode.LanguageModelToolResult | vscode.LanguageModelToolResult2> {
-		this._onWillInvokeTool.fire({ toolName: name });
-		return vscode.lm.invokeTool(getContributedToolName(name), options, token);
+		this._onWillInvokeTool.fire({ toolName: String(name) });
+		this.incrementActiveToolCount();
+		
+		const toolPromise = vscode.lm.invokeTool(getContributedToolName(name), options, token);
+		
+		// Track when the tool completes (success or failure)
+		toolPromise.then(
+			() => {
+				this.decrementActiveToolCount();
+				this._onDidInvokeTool.fire({ toolName: String(name), success: true });
+			},
+			() => {
+				this.decrementActiveToolCount();
+				this._onDidInvokeTool.fire({ toolName: String(name), success: false });
+			}
+		);
+		
+		return toolPromise;
 	}
 
 	override getCopilotTool(name: string): ICopilotTool<unknown> | undefined {

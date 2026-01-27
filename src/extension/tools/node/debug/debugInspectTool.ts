@@ -8,6 +8,7 @@ import { ToolName } from '../../common/toolNames';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../../common/toolsRegistry';
 import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { LanguageModelTextPart, ExtendedLanguageModelToolResult } from '../../../../vscodeTypes';
+import { getActiveJdbSession, sendJdbCommand } from './jdbSession';
 
 export interface IDebugInspectParams {
 	/** Action to perform */
@@ -16,130 +17,59 @@ export interface IDebugInspectParams {
 	expression?: string;
 	/** Object ID to inspect fields of */
 	objectId?: string;
-	/** How deep to expand nested objects (default: 2) */
-	maxDepth?: number;
-	/** Truncate long strings (default: 100) */
-	maxStringLength?: number;
-}
-
-interface IVariable {
-	name: string;
-	type: string;
-	value: string | object;
-	objectId?: string;
-}
-
-interface IStackFrame {
-	index: number;
-	className: string;
-	method: string;
-	file: string;
-	line: number;
 }
 
 class DebugInspectTool implements ICopilotTool<IDebugInspectParams> {
 	public static readonly toolName = ToolName.DebugInspect;
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugInspectParams>, _token: vscode.CancellationToken) {
-		const { action, expression, objectId, maxDepth = 2, maxStringLength = 100 } = options.input;
+		const { action, expression, objectId } = options.input;
 
-		console.log('[DebugInspectTool] Action:', action, { expression, objectId, maxDepth, maxStringLength });
+		console.log('[DebugInspectTool] Action:', action, { expression, objectId });
+
+		// Get active JDB session
+		const session = getActiveJdbSession();
+		if (!session) {
+			return this.errorResult('No active JDB session. Call debug_start first.');
+		}
 
 		try {
 			let jdbCommand: string;
-			let result: { variables?: IVariable[]; stackFrames?: IStackFrame[]; jdbCommand: string; message: string };
 
 			switch (action) {
-				case 'locals': {
+				case 'locals':
 					jdbCommand = 'locals';
-					result = {
-						jdbCommand,
-						message: 'Displaying local variables. Run "locals" in JDB to see actual values.',
-						variables: [
-							{ name: '<placeholder>', type: 'N/A', value: 'Run "locals" in JDB to see local variables' }
-						]
-					};
 					break;
-				}
-
-				case 'eval': {
+				case 'eval':
 					if (!expression) {
 						return this.errorResult('expression is required for eval action');
 					}
 					jdbCommand = `print ${expression}`;
-					result = {
-						jdbCommand,
-						message: `Evaluating: ${expression}. Run "${jdbCommand}" in JDB to see the result.`,
-						variables: [
-							{ name: expression, type: 'N/A', value: `<run "${jdbCommand}" in JDB>` }
-						]
-					};
 					break;
-				}
-
-				case 'stack': {
+				case 'stack':
 					jdbCommand = 'where';
-					result = {
-						jdbCommand,
-						message: 'Displaying stack trace. Run "where" in JDB to see actual frames.',
-						stackFrames: [
-							{ index: 0, className: '<placeholder>', method: 'N/A', file: 'N/A', line: 0 }
-						]
-					};
 					break;
-				}
-
-				case 'this': {
+				case 'this':
 					jdbCommand = 'print this';
-					result = {
-						jdbCommand,
-						message: 'Displaying "this" object. Run "print this" in JDB to see actual value.',
-						variables: [
-							{ name: 'this', type: 'N/A', value: '<run "print this" in JDB>' }
-						]
-					};
 					break;
-				}
-
-				case 'fields': {
-					if (!objectId) {
-						jdbCommand = 'dump this';
-						result = {
-							jdbCommand,
-							message: 'Displaying fields of "this". Run "dump this" in JDB to see actual values.',
-							variables: [
-								{ name: '<placeholder>', type: 'N/A', value: 'Run "dump this" or "dump <objectId>" in JDB' }
-							]
-						};
-					} else {
-						jdbCommand = `dump ${objectId}`;
-						result = {
-							jdbCommand,
-							message: `Displaying fields of ${objectId}. Run "${jdbCommand}" in JDB.`,
-							variables: [
-								{ name: '<placeholder>', type: 'N/A', value: `Run "${jdbCommand}" in JDB` }
-							]
-						};
-					}
+				case 'fields':
+					jdbCommand = objectId ? `dump ${objectId}` : 'dump this';
 					break;
-				}
-
 				default:
 					return this.errorResult(`Unknown action: ${action}`);
 			}
 
-			// Add inspection options to result
-			const fullResult = {
-				...result,
-				options: { maxDepth, maxStringLength },
-				instructions: `Execute in JDB terminal: ${jdbCommand}\n` +
-					'Parse the output to understand program state.'
-			};
-
-			console.log('[DebugInspectTool] Result:', fullResult);
+			// Send command to JDB
+			const result = await sendJdbCommand(session.sessionId, jdbCommand);
 
 			return new ExtendedLanguageModelToolResult([
-				new LanguageModelTextPart(JSON.stringify(fullResult, null, 2))
+				new LanguageModelTextPart(JSON.stringify({
+					status: result.success ? 'success' : 'error',
+					action,
+					jdbCommand,
+					output: result.output,
+					error: result.error
+				}, null, 2))
 			]);
 
 		} catch (error) {
@@ -151,7 +81,7 @@ class DebugInspectTool implements ICopilotTool<IDebugInspectParams> {
 
 	private errorResult(message: string) {
 		return new ExtendedLanguageModelToolResult([
-			new LanguageModelTextPart(JSON.stringify({ error: message }, null, 2))
+			new LanguageModelTextPart(JSON.stringify({ status: 'error', error: message }, null, 2))
 		]);
 	}
 

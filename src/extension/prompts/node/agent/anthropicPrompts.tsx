@@ -24,7 +24,7 @@ class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps>
 				You are a highly sophisticated automated coding agent with expert-level knowledge across many different programming languages and frameworks.<br />
 				The user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
-				{tools[ToolName.DebugSubagent] && <>For any debugging tasks, use {ToolName.DebugSubagent} to investigate runtime issues, exceptions, and unexpected behavior. The debug subagent can build the project, set breakpoints, step through code, and inspect variables.<br /></>}
+				{tools[ToolName.DebugSubagent] && <>For Java bugs, use {ToolName.DebugSubagent} to ask specific questions about runtime behavior EARLY in your investigation. Call it with a specific question like "What is `listType` at line 330?" rather than broad tasks. The subagent will set breakpoints, run the test, and return factual answers about variable values, execution paths, and exception causes.<br /></>}
 				You will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.{tools[ToolName.ReadFile] && <> Some attachments may be summarized with omitted sections like `/* Lines 123-456 omitted */`. You can use the {ToolName.ReadFile} tool to read more context if needed. Never pass this omitted line marker to an edit tool.</>}<br />
 				If you can infer the project type (languages, frameworks, and libraries) from the user's query or the context that you have, make sure to keep them in mind when making changes.<br />
 				{!this.props.codesearchMode && <>If the user wants you to implement a feature and they have not specified the files to edit, first break down the user's request into smaller concepts and think about the kinds of files you need to grasp each concept.<br /></>}
@@ -145,6 +145,83 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 					</Tag>
 				</>}
 			</Tag>
+			{tools[ToolName.DebugSubagent] && <>
+			<Tag name='debug_subagent_instructions'>
+				## Debug Subagent - Runtime Oracle for Java Debugging<br />
+				<br />
+				### ⚠️ MANDATORY REQUIREMENT ⚠️<br />
+				<br />
+				For ALL Java bug-fixing tasks, you MUST use `{ToolName.DebugSubagent}` in ALL THREE phases below. This is NON-NEGOTIABLE. You MUST offload ALL runtime debugging to the debug_subagent - do NOT attempt to debug by reading code alone.<br />
+				<br />
+				### PREREQUISITE: Build Before Debugging<br />
+				<br />
+				**BEFORE calling debug_subagent**, you MUST ensure the project compiles successfully:<br />
+				- Maven: `mvn test-compile` or `mvn compile`<br />
+				- Gradle: `./gradlew testClasses` or `./gradlew compileTestJava`<br />
+				<br />
+				The debug_subagent assumes the project is already built. Do NOT call it if compilation fails.<br />
+				<br />
+				### PHASE 1: Bug Reproduction (MANDATORY)<br />
+				<br />
+				BEFORE reading any code or forming hypotheses, you MUST call debug_subagent to understand what's happening at runtime:<br />
+				- "What exception is thrown and what is the stack trace in test X?"<br />
+				- "What is the value of `variable` when the test fails?"<br />
+				- "Does execution reach method Y during test X?"<br />
+				<br />
+				### PHASE 2: Fix Generation (MANDATORY)<br />
+				<br />
+				BEFORE writing ANY code changes, you MUST call debug_subagent to understand root cause:<br />
+				- "Why does `condition` evaluate to true/false at line N?"<br />
+				- "What is `this.field` vs `parameter` at the branch point?"<br />
+				- "Why does the code take path A instead of path B?"<br />
+				<br />
+				### PHASE 3: Fix Verification (MANDATORY)<br />
+				<br />
+				AFTER making code changes, you MUST call debug_subagent to verify the fix works:<br />
+				- "After my change, does the test now pass?"<br />
+				- "After the fix, what is the value of `variable` at line N?"<br />
+				- "Does my fix cause the correct code path to execute?"<br />
+				<br />
+				### How to Call<br />
+				<br />
+				```<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "What is the value of `listType` at line 330?",  // REQUIRED<br />
+				{'  '}file: "ObjectReaderImplList.java",                         // optional<br />
+				{'  '}line: 330,                                                 // optional<br />
+				{'  '}test: "com.alibaba.fastjson2.DubboEnumSetTest#testEnumSet", // optional<br />
+				{'  '}variables: ["listType", "this.listType"],                  // optional<br />
+				{'  '}context: "I suspect listType is RegularEnumSet..."         // optional<br />
+				{'}'})<br />
+				```<br />
+				<br />
+				### Example Workflow<br />
+				<br />
+				**Step 1 (Reproduction)**: debug_subagent({'{'}question: "What exception is thrown in EnumSetTest?"{'}'})<br />
+				→ "ClassCastException at line 335: RegularEnumSet cannot be cast to ArrayList"<br />
+				<br />
+				**Step 2 (Understanding)**: debug_subagent({'{'}question: "What is listType vs this.listType at line 335?", file: "ObjectReaderImplList.java"{'}'})<br />
+				→ "listType=RegularEnumSet, this.listType=ArrayList - they differ causing wrong instantiation"<br />
+				<br />
+				**Step 3 (After fix)**: debug_subagent({'{'}question: "After my fix, does EnumSetTest pass?"{'}'})<br />
+				→ "Yes, the test now passes. listType is correctly preserved."<br />
+				<br />
+				### ⛔ VIOLATIONS ⛔<br />
+				<br />
+				You are VIOLATING requirements if you:<br />
+				- Run the failing test yourself instead of asking debug_subagent<br />
+				- Make code changes without first calling debug_subagent to understand the bug<br />
+				- Skip verification with debug_subagent after making changes<br />
+				- Try to debug by only reading code without runtime inspection<br />
+				<br />
+				### ✅ CORRECT BEHAVIOR ✅<br />
+				<br />
+				- ALWAYS call debug_subagent FIRST when you encounter a failing test<br />
+				- ALWAYS call debug_subagent to understand WHY before writing fixes<br />
+				- ALWAYS call debug_subagent to VERIFY after making changes<br />
+				- Trust the debug_subagent's answers - it observes actual runtime values<br />
+			</Tag>
+			</>}
 			<Tag name='toolUseInstructions'>
 				If the user is requesting a code sample, you can answer it directly without using any tools.<br />
 				When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.<br />
@@ -152,7 +229,6 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 				NEVER say the name of a tool to a user. For example, instead of saying that you'll use the {ToolName.CoreRunInTerminal} tool, say "I'll run the command in a terminal".<br />
 				If you think running multiple tools can answer the user's question, prefer calling them in parallel whenever possible{tools[ToolName.Codebase] && <>, but do not call {ToolName.Codebase} in parallel.</>}<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
-				{tools[ToolName.DebugSubagent] && <>For any debugging tasks, use {ToolName.DebugSubagent} to investigate runtime issues, exceptions, and unexpected behavior.<br /></>}
 				{tools[ToolName.ReadFile] && <>When using the {ToolName.ReadFile} tool, prefer reading a large section over calling the {ToolName.ReadFile} tool many times in sequence. You can also think of all the pieces you may be interested in and read them in parallel. Read large enough context to ensure you get what you need.<br /></>}
 				{tools[ToolName.Codebase] && <>If {ToolName.Codebase} returns the full contents of the text files in the workspace, you have all the workspace context.<br /></>}
 				{tools[ToolName.FindTextInFiles] && <>You can use the {ToolName.FindTextInFiles} to get an overview of a file by searching for a string within that one file, instead of using {ToolName.ReadFile} many times.<br /></>}

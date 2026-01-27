@@ -199,8 +199,8 @@
 				"displayName": "Debug Subagent",
 				"icon": "$(bug)",
 				"canBeReferencedInPrompt": true,
-				"userDescription": "Launch a debugging subagent to investigate Java issues using JDB",
-				"modelDescription": "Launch a debugging subagent specialized in Java debugging using JDB (Java Debugger). The subagent will:\n1. Build the project with debug symbols (detects Maven/Gradle/javac)\n2. Start a JDB debug session\n3. Set breakpoints based on the error/issue\n4. Step through code and inspect variables\n5. Report findings including root cause and suggested fix\n\nUse this tool when:\n- User reports a runtime exception (NullPointerException, IndexOutOfBoundsException, etc.)\n- User needs to understand why code behaves unexpectedly\n- User suspects a deadlock or threading issue\n- User wants to trace execution flow\n\nThe subagent has access to JDB tools (debug_start, debug_breakpoint, debug_control, debug_inspect, debug_threads) and terminal commands for building.\n\nInput fields:\n- task: Detailed description of what to debug, including error messages, stack traces, and suspected problem areas\n- description: Short user-visible message",
+				"userDescription": "Ask questions about Java runtime behavior using JDB debugger",
+				"modelDescription": "A Runtime Oracle that answers specific questions about Java program execution using JDB (Java Debugger).\n\nUse this tool to ask specific questions about runtime behavior:\n- Variable values: \"What is `listType` at ObjectReaderImplList.java:330?\"\n- Reachability: \"Does execution reach line 450 during test X?\"\n- Condition evaluation: \"Why does `x != y` evaluate to true at line 335?\"\n- Exception causes: \"What causes the NullPointerException in ClearMocksTest?\"\n- Comparison: \"Compare execution between passing testA and failing testB\"\n\nThe subagent will:\n1. Build the project\n2. Set breakpoints at specified locations\n3. Run the test\n4. Inspect variables and return factual answers\n\nCall this tool EARLY in your investigation (before writing fixes) to understand root causes.",
 				"tags": [
 					"debugging",
 					"java"
@@ -208,18 +208,34 @@
 				"inputSchema": {
 					"type": "object",
 					"properties": {
-						"task": {
+						"question": {
 							"type": "string",
-							"description": "Detailed description of the debugging task. Include: error messages, stack traces, file/line references, what behavior is expected vs actual, and any hypotheses about the cause."
+							"description": "Specific question about runtime behavior. Examples: 'What is `listType` at line 330?', 'Why does the condition at line 335 evaluate to true?', 'What causes the NPE in test X?'"
 						},
-						"description": {
+						"file": {
 							"type": "string",
-							"description": "Short user-visible message shown while the debug subagent runs."
+							"description": "File path to focus on (helps target breakpoints). Optional."
+						},
+						"test": {
+							"type": "string",
+							"description": "Fully qualified test name to run (e.g., 'com.example.MyTest#testMethod'). Optional."
+						},
+						"line": {
+							"type": "number",
+							"description": "Specific line number to set breakpoint. Optional."
+						},
+						"variables": {
+							"type": "array",
+							"items": { "type": "string" },
+							"description": "Variables or expressions to inspect at the breakpoint. Optional."
+						},
+						"context": {
+							"type": "string",
+							"description": "Your hypothesis about what's happening (helps guide investigation). Optional."
 						}
 					},
 					"required": [
-						"task",
-						"description"
+						"question"
 					]
 				}
 			},
@@ -274,7 +290,7 @@
 				"icon": "$(debug-breakpoint)",
 				"canBeReferencedInPrompt": false,
 				"userDescription": "Manage JDB breakpoints",
-				"modelDescription": "Set, remove, list, enable, or disable breakpoints in a JDB session. Supports conditional breakpoints that only trigger when a condition is met.\n\nBreakpoint types:\n- Line breakpoints: stop at ClassName:lineNumber\n- Method breakpoints: stop in ClassName.methodName\n- Conditional: stop at ClassName:line if expression",
+				"modelDescription": "Set, remove, list, enable, or disable breakpoints in a JDB session.\n\nBreakpoint types:\n- Method breakpoint: {action: 'set', className: 'TypeUtils', method: 'cast'}\n- Code pattern: {action: 'set', className: 'ObjectReaderImplList', nearCode: 'if (listType != null)'}\n- Line breakpoint: {action: 'set', className: 'TypeUtils', line: 330}",
 				"tags": [
 					"debugging"
 				],
@@ -288,19 +304,27 @@
 						},
 						"className": {
 							"type": "string",
-							"description": "Fully qualified class name (e.g., 'com.example.MyClass')"
+							"description": "Class name (e.g., 'TypeUtils' or 'com.example.TypeUtils')"
+						},
+						"method": {
+							"type": "string",
+							"description": "Method name for method-entry breakpoint (e.g., 'cast', 'readObject')"
+						},
+						"nearCode": {
+							"type": "string",
+							"description": "Code snippet to search for - breakpoint set at line containing this code"
+						},
+						"file": {
+							"type": "string",
+							"description": "File path to search when using nearCode"
 						},
 						"line": {
 							"type": "number",
 							"description": "Line number for line breakpoint"
 						},
-						"method": {
-							"type": "string",
-							"description": "Method name for method breakpoint (alternative to line)"
-						},
 						"condition": {
 							"type": "string",
-							"description": "Conditional expression (e.g., 'i > 100' or 'name.equals(\"test\")')"
+							"description": "Conditional expression (e.g., 'i > 100')"
 						},
 						"hitCount": {
 							"type": "number",

@@ -30,16 +30,80 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				- Execute a wide range of development tasks including file operations, code analysis, testing, workspace management, and external integrations.<br />
 			</Tag>
 			{tools[ToolName.DebugSubagent] && <>
-			<Tag name='debug_subagent_requirement'>
-				**CRITICAL REQUIREMENT**: You MUST call {ToolName.DebugSubagent} with a debugging task before completing your task. This is MANDATORY!!<br />
+			<Tag name='debug_subagent_instructions'>
+				## Debug Subagent - Runtime Oracle for Java Debugging<br />
 				<br />
-				The {ToolName.DebugSubagent} tool is essential for ALL coding tasks. Use it in the same way you would use a debugger:<br />
-				- Bug investigation: Use it to find root causes of errors and exceptions<br />
-				- Feature implementation: Use it to understand code flow before making changes<br />
-				- Bug fixes: Use it to verify your fix works correctly by running the code<br />
-				- Code understanding: Use it to trace execution and inspect state<br />
+				### ⚠️ MANDATORY REQUIREMENT ⚠️<br />
 				<br />
-				**WORKFLOW**: At some point during the task, you MUST call {ToolName.DebugSubagent} with a debugging task. Whether it is to reproduce the bug, verify the fix or getting a better understanding of the code. This is VERY IMPORTANT and your primary goal!<br />
+				For ALL Java bug-fixing tasks, you MUST use `{ToolName.DebugSubagent}` in ALL THREE phases below. This is NON-NEGOTIABLE. You MUST offload ALL runtime debugging to the debug_subagent - do NOT attempt to debug by reading code alone.<br />
+				<br />
+				### PREREQUISITE: Build Before Debugging<br />
+				<br />
+				**BEFORE calling debug_subagent**, you MUST ensure the project compiles successfully:<br />
+				- Maven: `mvn test-compile` or `mvn compile`<br />
+				- Gradle: `./gradlew testClasses` or `./gradlew compileTestJava`<br />
+				<br />
+				The debug_subagent assumes the project is already built. Do NOT call it if compilation fails.<br />
+				<br />
+				### PHASE 1: Bug Reproduction (MANDATORY)<br />
+				<br />
+				BEFORE reading any code or forming hypotheses, you MUST call debug_subagent to understand what's happening at runtime:<br />
+				- "What exception is thrown and what is the stack trace in test X?"<br />
+				- "What is the value of `variable` when the test fails?"<br />
+				- "Does execution reach method Y during test X?"<br />
+				<br />
+				### PHASE 2: Fix Generation (MANDATORY)<br />
+				<br />
+				BEFORE writing ANY code changes, you MUST call debug_subagent to understand root cause:<br />
+				- "Why does `condition` evaluate to true/false at line N?"<br />
+				- "What is `this.field` vs `parameter` at the branch point?"<br />
+				- "Why does the code take path A instead of path B?"<br />
+				<br />
+				### PHASE 3: Fix Verification (MANDATORY)<br />
+				<br />
+				AFTER making code changes, you MUST call debug_subagent to verify the fix works:<br />
+				- "After my change, does the test now pass?"<br />
+				- "After the fix, what is the value of `variable` at line N?"<br />
+				- "Does my fix cause the correct code path to execute?"<br />
+				<br />
+				### How to Call<br />
+				<br />
+				```<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "What is the value of `listType` at line 330?",  // REQUIRED<br />
+				{'  '}file: "ObjectReaderImplList.java",                         // optional<br />
+				{'  '}line: 330,                                                 // optional<br />
+				{'  '}test: "com.alibaba.fastjson2.DubboEnumSetTest#testEnumSet", // optional<br />
+				{'  '}variables: ["listType", "this.listType"],                  // optional<br />
+				{'  '}context: "I suspect listType is RegularEnumSet..."         // optional<br />
+				{'}'})<br />
+				```<br />
+				<br />
+				### Example Workflow<br />
+				<br />
+				**Step 1 (Reproduction)**: debug_subagent({'{'}question: "What exception is thrown in EnumSetTest?"{'}'})<br />
+				→ "ClassCastException at line 335: RegularEnumSet cannot be cast to ArrayList"<br />
+				<br />
+				**Step 2 (Understanding)**: debug_subagent({'{'}question: "What is listType vs this.listType at line 335?", file: "ObjectReaderImplList.java"{'}'})<br />
+				→ "listType=RegularEnumSet, this.listType=ArrayList - they differ causing wrong instantiation"<br />
+				<br />
+				**Step 3 (After fix)**: debug_subagent({'{'}question: "After my fix, does EnumSetTest pass?"{'}'})<br />
+				→ "Yes, the test now passes. listType is correctly preserved."<br />
+				<br />
+				### ⛔ VIOLATIONS ⛔<br />
+				<br />
+				You are VIOLATING requirements if you:<br />
+				- Run the failing test yourself instead of asking debug_subagent<br />
+				- Make code changes without first calling debug_subagent to understand the bug<br />
+				- Skip verification with debug_subagent after making changes<br />
+				- Try to debug by only reading code without runtime inspection<br />
+				<br />
+				### ✅ CORRECT BEHAVIOR ✅<br />
+				<br />
+				- ALWAYS call debug_subagent FIRST when you encounter a failing test<br />
+				- ALWAYS call debug_subagent to understand WHY before writing fixes<br />
+				- ALWAYS call debug_subagent to VERIFY after making changes<br />
+				- Trust the debug_subagent's answers - it observes actual runtime values<br />
 			</Tag>
 			</>}
 			<Tag name='personality'>

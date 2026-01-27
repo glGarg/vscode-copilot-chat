@@ -19,10 +19,18 @@ import { ToolName } from '../common/toolNames';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 
 export interface IDebugSubagentParams {
-	/** Natural language description of the debugging task */
-	task: string;
-	/** User-visible description shown while invoking */
-	description: string;
+	/** Specific question about runtime behavior to answer */
+	question: string;
+	/** File path to focus on (optional - helps target breakpoints) */
+	file?: string;
+	/** Test to run to reproduce the issue (optional) */
+	test?: string;
+	/** Specific line number to set breakpoint (optional) */
+	line?: number;
+	/** Variables/expressions to inspect at the breakpoint (optional) */
+	variables?: string[];
+	/** Your hypothesis about what's happening (optional - helps guide investigation) */
+	context?: string;
 }
 
 class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
@@ -35,13 +43,34 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 	) { }
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugSubagentParams>, token: vscode.CancellationToken) {
-		const debugInstruction = `Debug task: ${options.input.task}`;
+		const { question, file, test, line, variables, context } = options.input;
+		
+		// Build a structured debug instruction from the input
+		let debugInstruction = `Debug Question: ${question}`;
+		if (file) {
+			debugInstruction += `\nFile: ${file}`;
+		}
+		if (line) {
+			debugInstruction += `\nLine: ${line}`;
+		}
+		if (test) {
+			debugInstruction += `\nTest to run: ${test}`;
+		}
+		if (variables && variables.length > 0) {
+			debugInstruction += `\nVariables to inspect: ${variables.join(', ')}`;
+		}
+		if (context) {
+			debugInstruction += `\nContext/Hypothesis: ${context}`;
+		}
 
 		console.log('[DebugSubagentTool] ========================================');
 		console.log('[DebugSubagentTool] INVOKE CALLED');
 		console.log('[DebugSubagentTool] ========================================');
-		console.log('[DebugSubagentTool] Task:', options.input.task);
-		console.log('[DebugSubagentTool] Description:', options.input.description);
+		console.log('[DebugSubagentTool] Question:', question);
+		console.log('[DebugSubagentTool] File:', file);
+		console.log('[DebugSubagentTool] Test:', test);
+		console.log('[DebugSubagentTool] Line:', line);
+		console.log('[DebugSubagentTool] Variables:', variables);
 
 		// Define the tools available to the debug subagent
 		const allowedTools = new Set([
@@ -65,7 +94,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			conversation: new Conversation('', [new Turn('', { type: 'user', message: debugInstruction })]),
 			request: this._inputContext!.request!,
 			location: this._inputContext!.request!.location,
-			promptText: options.input.task,
+			promptText: question,
 			allowedTools,
 			customPromptClass: DebugSubagentPrompt as typeof DebugSubagentPrompt & PromptElementCtor,
 		});
@@ -76,8 +105,9 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		);
 
 		// Create a capturing token to group the debug subagent and all its nested tool calls
+		const questionPreview = question.substring(0, 50) + (question.length > 50 ? '...' : '');
 		const debugSubagentToken = new CapturingToken(
-			`Debug: ${options.input.task.substring(0, 50)}${options.input.task.length > 50 ? '...' : ''}`,
+			`Debug: ${questionPreview}`,
 			'debug',
 			false
 		);
@@ -92,8 +122,12 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 
 		// Build subagent trajectory metadata
 		const toolMetadata = {
-			task: options.input.task,
-			description: options.input.description,
+			question: question,
+			file: file,
+			test: test,
+			line: line,
+			variables: variables,
+			context: context,
 			toolsUsed: Array.from(allowedTools)
 		};
 
@@ -114,8 +148,9 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 	}
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IDebugSubagentParams>, _token: vscode.CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
+		const questionPreview = options.input.question.substring(0, 60) + (options.input.question.length > 60 ? '...' : '');
 		return {
-			invocationMessage: options.input.description,
+			invocationMessage: `Investigating: ${questionPreview}`,
 		};
 	}
 

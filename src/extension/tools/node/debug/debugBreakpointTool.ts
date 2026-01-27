@@ -8,16 +8,21 @@ import { ToolName } from '../../common/toolNames';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../../common/toolsRegistry';
 import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { LanguageModelTextPart, ExtendedLanguageModelToolResult } from '../../../../vscodeTypes';
+import { getActiveJdbSession, sendJdbCommand } from './jdbSession';
 
 export interface IDebugBreakpointParams {
 	/** Action to perform */
 	action: 'set' | 'remove' | 'list' | 'enable' | 'disable';
-	/** Class name for the breakpoint location */
+	/** Class name for the breakpoint location (can be simple name like "TypeUtils" or fully qualified) */
 	className?: string;
 	/** Line number for the breakpoint */
 	line?: number;
-	/** Method name (alternative to line number) */
+	/** Method name for method-entry breakpoint (e.g., "cast", "readObject") */
 	method?: string;
+	/** Code snippet to search for - breakpoint set at line containing this code */
+	nearCode?: string;
+	/** File path to search when using nearCode */
+	file?: string;
 	/** Conditional expression for the breakpoint */
 	condition?: string;
 	/** Break only after N hits */
@@ -26,27 +31,19 @@ export interface IDebugBreakpointParams {
 	breakpointId?: string;
 }
 
-interface IBreakpoint {
-	id: string;
-	className: string;
-	line?: number;
-	method?: string;
-	condition?: string;
-	enabled: boolean;
-	hitCount: number;
-}
-
-// Store breakpoints (in real implementation, would sync with JDB)
-const breakpoints = new Map<string, IBreakpoint>();
-let breakpointCounter = 0;
-
 class DebugBreakpointTool implements ICopilotTool<IDebugBreakpointParams> {
 	public static readonly toolName = ToolName.DebugBreakpoint;
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugBreakpointParams>, _token: vscode.CancellationToken) {
-		const { action, className, line, method, condition, hitCount, breakpointId } = options.input;
+		const { action, className, line, method, nearCode, file, condition, breakpointId } = options.input;
 
-		console.log('[DebugBreakpointTool] Action:', action, { className, line, method, condition, hitCount, breakpointId });
+		console.log('[DebugBreakpointTool] Action:', action, { className, line, method, nearCode, file, condition, breakpointId });
+
+		// Get active JDB session
+		const session = getActiveJdbSession();
+		if (!session) {
+			return this.errorResult('No active JDB session. Call debug_start first to start a JDB session.');
+		}
 
 		try {
 			switch (action) {
@@ -54,94 +51,97 @@ class DebugBreakpointTool implements ICopilotTool<IDebugBreakpointParams> {
 					if (!className) {
 						return this.errorResult('className is required to set a breakpoint');
 					}
-					if (!line && !method) {
-						return this.errorResult('Either line or method is required to set a breakpoint');
+					
+					if (!line && !method && !nearCode) {
+						return this.errorResult('One of line, method, or nearCode is required to set a breakpoint');
 					}
 
-					const id = `bp-${++breakpointCounter}`;
-					const bp: IBreakpoint = {
-						id,
-						className,
-						line,
-						method,
-						condition,
-						enabled: true,
-						hitCount: hitCount || 0
-					};
-					breakpoints.set(id, bp);
-
-					// Generate JDB command
+					// Build JDB command
 					let jdbCommand: string;
-					if (line) {
-						jdbCommand = condition
-							? `stop at ${className}:${line} if ${condition}`
-							: `stop at ${className}:${line}`;
+					let locationDesc: string;
+					
+					if (method) {
+						jdbCommand = `stop in ${className}.${method}`;
+						locationDesc = `${className}.${method}()`;
+					} else if (line) {
+						jdbCommand = `stop at ${className}:${line}`;
+						locationDesc = `${className}:${line}`;
+					} else if (nearCode) {
+						// For nearCode, we need to resolve the line first
+						// This would require searching the file - for now, guide the user
+						return this.errorResult(`nearCode requires line resolution. Search for "${nearCode}" in ${file || className} to find the line number, then use line parameter.`);
 					} else {
-						jdbCommand = condition
-							? `stop in ${className}.${method} if ${condition}`
-							: `stop in ${className}.${method}`;
+						return this.errorResult('Could not determine breakpoint location');
+					}
+
+					// Add condition if provided
+					if (condition) {
+						jdbCommand += ` if ${condition}`;
+					}
+
+					// Send command to JDB
+					const result = await sendJdbCommand(session.sessionId, jdbCommand);
+
+					if (!result.success) {
+						return this.errorResult(`Failed to set breakpoint: ${result.error}`);
 					}
 
 					return new ExtendedLanguageModelToolResult([
 						new LanguageModelTextPart(JSON.stringify({
-							breakpointId: id,
+							status: 'success',
+							message: `Breakpoint set at ${locationDesc}`,
 							jdbCommand,
-							message: `Breakpoint set at ${className}:${line || method}${condition ? ` (condition: ${condition})` : ''}`,
-							breakpoint: bp
+							jdbOutput: result.output
 						}, null, 2))
 					]);
 				}
 
 				case 'remove': {
-					if (!breakpointId) {
-						return this.errorResult('breakpointId is required to remove a breakpoint');
+					if (!className && !breakpointId) {
+						return this.errorResult('className or breakpointId is required to remove a breakpoint');
 					}
-					const bp = breakpoints.get(breakpointId);
-					if (!bp) {
-						return this.errorResult(`Breakpoint ${breakpointId} not found`);
-					}
-					breakpoints.delete(breakpointId);
 
-					const jdbCommand = bp.line
-						? `clear ${bp.className}:${bp.line}`
-						: `clear ${bp.className}.${bp.method}`;
+					let jdbCommand: string;
+					if (breakpointId) {
+						// JDB uses "clear" with the location, not an ID
+						jdbCommand = `clear ${breakpointId}`;
+					} else if (method) {
+						jdbCommand = `clear ${className}.${method}`;
+					} else if (line) {
+						jdbCommand = `clear ${className}:${line}`;
+					} else {
+						return this.errorResult('Specify method or line to clear breakpoint');
+					}
+
+					const result = await sendJdbCommand(session.sessionId, jdbCommand);
 
 					return new ExtendedLanguageModelToolResult([
 						new LanguageModelTextPart(JSON.stringify({
+							status: result.success ? 'success' : 'error',
+							message: result.success ? 'Breakpoint removed' : result.error,
 							jdbCommand,
-							message: `Breakpoint ${breakpointId} removed`
+							jdbOutput: result.output
 						}, null, 2))
 					]);
 				}
 
 				case 'list': {
-					const allBreakpoints = Array.from(breakpoints.values());
+					// JDB "stop" command without args lists all breakpoints
+					const result = await sendJdbCommand(session.sessionId, 'stop');
+
 					return new ExtendedLanguageModelToolResult([
 						new LanguageModelTextPart(JSON.stringify({
-							breakpoints: allBreakpoints,
-							count: allBreakpoints.length,
-							jdbCommand: 'stop'
+							status: 'success',
+							message: 'Breakpoints listed',
+							jdbOutput: result.output
 						}, null, 2))
 					]);
 				}
 
 				case 'enable':
 				case 'disable': {
-					if (!breakpointId) {
-						return this.errorResult(`breakpointId is required to ${action} a breakpoint`);
-					}
-					const bp = breakpoints.get(breakpointId);
-					if (!bp) {
-						return this.errorResult(`Breakpoint ${breakpointId} not found`);
-					}
-					bp.enabled = action === 'enable';
-
-					return new ExtendedLanguageModelToolResult([
-						new LanguageModelTextPart(JSON.stringify({
-							message: `Breakpoint ${breakpointId} ${action}d`,
-							breakpoint: bp
-						}, null, 2))
-					]);
+					// JDB doesn't have native enable/disable - would need to remove and re-add
+					return this.errorResult(`JDB does not support ${action} - use remove and set instead`);
 				}
 
 				default:
@@ -156,7 +156,7 @@ class DebugBreakpointTool implements ICopilotTool<IDebugBreakpointParams> {
 
 	private errorResult(message: string) {
 		return new ExtendedLanguageModelToolResult([
-			new LanguageModelTextPart(JSON.stringify({ error: message }, null, 2))
+			new LanguageModelTextPart(JSON.stringify({ status: 'error', error: message }, null, 2))
 		]);
 	}
 

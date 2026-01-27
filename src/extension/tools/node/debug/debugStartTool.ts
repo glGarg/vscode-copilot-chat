@@ -8,108 +8,116 @@ import { ToolName } from '../../common/toolNames';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../../common/toolsRegistry';
 import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { LanguageModelTextPart, ExtendedLanguageModelToolResult } from '../../../../vscodeTypes';
+import { startJdbSession, attachJdbSession, getActiveJdbSession } from './jdbSession';
 
 export interface IDebugStartParams {
-	/** Mode: 'launch' to start new process, 'attach' to connect to running process */
+	/** Mode: 'launch' to start new process, 'attach' to connect to running JVM with debug agent */
 	mode: 'launch' | 'attach';
-	/** Main class to debug (required for launch mode) */
+	/** Main class to debug (required for launch mode - must have main() method) */
 	mainClass?: string;
-	/** Debug port (required for attach mode) */
+	/** Debug port (required for attach mode, default: 5005) */
 	port?: number;
-	/** Classpath for the application */
+	/** Host to attach to (default: localhost) */
+	host?: string;
+	/** Classpath for the application (launch mode only) */
 	classpath?: string;
-	/** Program arguments */
-	args?: string[];
-	/** Whether to suspend on start (default: true) */
-	suspend?: boolean;
+	/** Working directory */
+	workingDir?: string;
 }
-
-interface IDebugSession {
-	sessionId: string;
-	status: 'started' | 'attached' | 'error';
-	message: string;
-	jdbProcess?: unknown;
-}
-
-// Store active debug sessions
-const activeSessions = new Map<string, IDebugSession>();
 
 class DebugStartTool implements ICopilotTool<IDebugStartParams> {
 	public static readonly toolName = ToolName.DebugStart;
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugStartParams>, _token: vscode.CancellationToken) {
-		const { mode, mainClass, port, classpath, args, suspend = true } = options.input;
+		const { mode, mainClass, port = 5005, host = 'localhost', classpath, workingDir } = options.input;
 
-		console.log('[DebugStartTool] Starting debug session:', { mode, mainClass, port, classpath, args, suspend });
-
-		const sessionId = `debug-${Date.now()}`;
-		let jdbCommand: string;
-		let resultMessage: string;
+		console.log('[DebugStartTool] Starting debug session:', { mode, mainClass, port, host, classpath, workingDir });
 
 		try {
+			// Check if there's already an active session
+			const existingSession = getActiveJdbSession();
+			if (existingSession) {
+				return new ExtendedLanguageModelToolResult([
+					new LanguageModelTextPart(JSON.stringify({
+						sessionId: existingSession.sessionId,
+						status: 'already_active',
+						message: `JDB session already active: ${existingSession.sessionId}. Use debug_control action="terminate" first if needed.`
+					}, null, 2))
+				]);
+			}
+
 			if (mode === 'launch') {
 				if (!mainClass) {
 					return new ExtendedLanguageModelToolResult([
 						new LanguageModelTextPart(JSON.stringify({
 							sessionId: null,
 							status: 'error',
-							message: 'mainClass is required for launch mode'
+							message: 'mainClass is required for launch mode. Note: For JUnit tests, use attach mode instead - first run the test with debug agent enabled.'
 						}, null, 2))
 					]);
 				}
 
-				// Build JDB launch command
-				const classpathArg = classpath ? `-classpath ${classpath}` : '';
-				const argsStr = args?.join(' ') || '';
-				jdbCommand = `jdb ${classpathArg} ${mainClass} ${argsStr}`.trim();
-				resultMessage = `Started JDB debugging session for ${mainClass}`;
+				const sessionId = `jdb-${Date.now()}`;
+				const result = await startJdbSession(sessionId, mainClass, classpath || '', workingDir);
 
-			} else if (mode === 'attach') {
-				if (!port) {
+				if (!result.success) {
 					return new ExtendedLanguageModelToolResult([
 						new LanguageModelTextPart(JSON.stringify({
 							sessionId: null,
 							status: 'error',
-							message: 'port is required for attach mode'
+							message: `Failed to start JDB: ${result.error}`,
+							output: result.output
 						}, null, 2))
 					]);
 				}
 
-				jdbCommand = `jdb -attach ${port}`;
-				resultMessage = `Attached JDB to port ${port}`;
+				return new ExtendedLanguageModelToolResult([
+					new LanguageModelTextPart(JSON.stringify({
+						sessionId,
+						status: 'started',
+						message: `JDB session started for ${mainClass}`,
+						output: result.output,
+						hint: 'Use debug_breakpoint to set breakpoints, then debug_control action="run" to start execution'
+					}, null, 2))
+				]);
+
+			} else if (mode === 'attach') {
+				const sessionId = `jdb-${Date.now()}`;
+				
+				// Attach to running JVM
+				const result = await attachJdbSession(sessionId, port, host, workingDir);
+
+				if (!result.success) {
+					return new ExtendedLanguageModelToolResult([
+						new LanguageModelTextPart(JSON.stringify({
+							sessionId: null,
+							status: 'error',
+							message: `Failed to attach JDB to ${host}:${port}: ${result.error}`,
+							output: result.output,
+							hint: 'Make sure the target JVM is running with debug agent. For Maven: mvn test -Dmaven.surefire.debug. For Gradle: ./gradlew test --debug-jvm'
+						}, null, 2))
+					]);
+				}
+
+				return new ExtendedLanguageModelToolResult([
+					new LanguageModelTextPart(JSON.stringify({
+						sessionId,
+						status: 'attached',
+						message: `JDB attached to ${host}:${port}`,
+						output: result.output,
+						hint: 'Use debug_breakpoint to set breakpoints, then debug_control action="continue" to resume execution'
+					}, null, 2))
+				]);
 
 			} else {
 				return new ExtendedLanguageModelToolResult([
 					new LanguageModelTextPart(JSON.stringify({
 						sessionId: null,
 						status: 'error',
-						message: `Invalid mode: ${mode}. Use 'launch' or 'attach'.`
+						message: `Invalid mode: ${mode}. Use 'launch' for classes with main(), or 'attach' for JUnit tests.`
 					}, null, 2))
 				]);
 			}
-
-			// Store session info
-			const session: IDebugSession = {
-				sessionId,
-				status: mode === 'launch' ? 'started' : 'attached',
-				message: resultMessage
-			};
-			activeSessions.set(sessionId, session);
-
-			const result = {
-				sessionId,
-				status: session.status,
-				message: resultMessage,
-				jdbCommand,
-				instructions: `Debug session initialized. Use the terminal to run: ${jdbCommand}\n` +
-					'Then use debug_breakpoint to set breakpoints, debug_control to run/step, and debug_inspect to examine state.'
-			};
-
-			console.log('[DebugStartTool] Session created:', result);
-
-			return new ExtendedLanguageModelToolResult([
-				new LanguageModelTextPart(JSON.stringify(result, null, 2))
-			]);
 
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
@@ -127,24 +135,15 @@ class DebugStartTool implements ICopilotTool<IDebugStartParams> {
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IDebugStartParams>, _token: vscode.CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		const mode = options.input.mode;
-		const target = mode === 'launch' ? options.input.mainClass : `port ${options.input.port}`;
+		const target = mode === 'launch' ? options.input.mainClass : `port ${options.input.port || 5005}`;
 		return {
-			invocationMessage: `Starting debug session (${mode}: ${target})`,
+			invocationMessage: `Starting JDB session (${mode}: ${target})`,
 		};
 	}
 
 	async resolveInput(input: IDebugStartParams, _promptContext: IBuildPromptContext, _mode: CopilotToolMode): Promise<IDebugStartParams> {
 		return input;
 	}
-}
-
-// Export for use by other debug tools
-export function getDebugSession(sessionId: string): IDebugSession | undefined {
-	return activeSessions.get(sessionId);
-}
-
-export function setDebugSession(sessionId: string, session: IDebugSession): void {
-	activeSessions.set(sessionId, session);
 }
 
 ToolRegistry.registerTool(DebugStartTool);

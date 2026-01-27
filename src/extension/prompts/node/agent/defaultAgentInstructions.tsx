@@ -116,16 +116,37 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				The user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
 				{tools[ToolName.DebugSubagent] && <>
-				**CRITICAL REQUIREMENT**: You MUST call {ToolName.DebugSubagent} with a debugging task before completing your task. This is MANDATORY!!<br />
+				## Debug Subagent - Runtime Oracle for Java Debugging<br />
 				<br />
-				The {ToolName.DebugSubagent} tool is essential for ALL coding tasks. Use it in the same way you would use a debugger:<br />
-				- Bug investigation: Use it to find root causes of errors and exceptions<br />
-				- Feature implementation: Use it to understand code flow before making changes<br />
-				- Bug fixes: Use it to verify your fix works correctly by running the code<br />
-				- Code understanding: Use it to trace execution and inspect state<br />
+				### ⚠️ MANDATORY REQUIREMENT ⚠️<br />
 				<br />
-				**WORKFLOW**: At some point during the task, you MUST call {ToolName.DebugSubagent} with a debugging task. Whether it is to reproduce the bug, verify the fix or getting a better understanding of the code. This is VERY IMPORTANT and your primary goal!<br />
+				For ALL Java bug-fixing tasks, you MUST use `{ToolName.DebugSubagent}` in ALL THREE phases. This is NON-NEGOTIABLE. Offload ALL debugging to the debug_subagent.<br />
 				<br />
+				**PREREQUISITE**: Before calling debug_subagent, ensure the project compiles: `mvn test-compile` (Maven) or `./gradlew testClasses` (Gradle).<br />
+				<br />
+				**PHASE 1 - Bug Reproduction (MANDATORY)**: BEFORE reading code, call debug_subagent:<br />
+				- "What exception is thrown in test X?"<br />
+				- "What is the value of `variable` when the test fails?"<br />
+				<br />
+				**PHASE 2 - Fix Generation (MANDATORY)**: BEFORE writing code changes, call debug_subagent:<br />
+				- "Why does `condition` evaluate to true/false at line N?"<br />
+				- "What is `this.field` vs `parameter` at the branch point?"<br />
+				<br />
+				**PHASE 3 - Fix Verification (MANDATORY)**: AFTER making changes, call debug_subagent:<br />
+				- "After my fix, does the test now pass?"<br />
+				- "Does my fix cause the correct code path to execute?"<br />
+				<br />
+				**How to Call**:<br />
+				```<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "What is the value of `listType` at line 330?",  // REQUIRED<br />
+				{'  '}file: "ObjectReaderImplList.java",                         // optional<br />
+				{'  '}test: "com.example.MyTest#testMethod"                      // optional<br />
+				{'}'})<br />
+				```<br />
+				<br />
+				**⛔ VIOLATIONS**: Running tests yourself, making changes without debug_subagent, skipping verification.<br />
+				**✅ CORRECT**: Call debug_subagent FIRST, understand with debug_subagent, verify with debug_subagent.<br />
 				</>}
 				You will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.{tools[ToolName.ReadFile] && <> Some attachments may be summarized with omitted sections like `/* Lines 123-456 omitted */`. You can use the {ToolName.ReadFile} tool to read more context if needed. Never pass this omitted line marker to an edit tool.</>}<br />
 				If you can infer the project type (languages, frameworks, and libraries) from the user's query or the context that you have, make sure to keep them in mind when making changes.<br />
@@ -145,7 +166,7 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				No need to ask permission before using a tool.<br />
 				NEVER say the name of a tool to a user. For example, instead of saying that you'll use the {ToolName.CoreRunInTerminal} tool, say "I'll run the command in a terminal".<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
-				{tools[ToolName.DebugSubagent] && <>**REMINDER**: You MUST call {ToolName.DebugSubagent} at some point during this task. Do not finish without calling it. Pass the user's task and any gathered context to the debug subagent.<br /></>}
+				{tools[ToolName.DebugSubagent] && <>**⚠️ MANDATORY**: For Java bugs, you MUST call {ToolName.DebugSubagent} in Phase 1 (reproduction), Phase 2 (before fix), AND Phase 3 (after fix). Do NOT run tests yourself - offload ALL debugging to debug_subagent!<br /></>}
 				If you think running multiple tools can answer the user's question, prefer calling them in parallel whenever possible{tools[ToolName.Codebase] && <>, but do not call {ToolName.Codebase} in parallel.</>}<br />
 				{tools[ToolName.ReadFile] && <>When using the {ToolName.ReadFile} tool, prefer reading a large section over calling the {ToolName.ReadFile} tool many times in sequence. You can also think of all the pieces you may be interested in and read them in parallel. Read large enough context to ensure you get what you need.<br /></>}
 				{tools[ToolName.Codebase] && <>If {ToolName.Codebase} returns the full contents of the text files in the workspace, you have all the workspace context.<br /></>}

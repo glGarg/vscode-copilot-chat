@@ -8,6 +8,7 @@ import { ToolName } from '../../common/toolNames';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../../common/toolsRegistry';
 import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { LanguageModelTextPart, ExtendedLanguageModelToolResult } from '../../../../vscodeTypes';
+import { getActiveJdbSession, sendJdbCommand, terminateJdbSession } from './jdbSession';
 
 export interface IDebugControlParams {
 	/** Action to perform */
@@ -15,13 +16,6 @@ export interface IDebugControlParams {
 	/** Thread ID (optional, defaults to current thread) */
 	threadId?: string;
 }
-
-// Track current debug state
-let currentState = {
-	status: 'stopped' as 'running' | 'suspended' | 'terminated' | 'stopped',
-	currentThread: 'main',
-	location: null as { className: string; method: string; line: number; file: string } | null
-};
 
 class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 	public static readonly toolName = ToolName.DebugControl;
@@ -31,97 +25,69 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 
 		console.log('[DebugControlTool] Action:', action, { threadId });
 
+		// Get active JDB session
+		const session = getActiveJdbSession();
+		if (!session) {
+			return new ExtendedLanguageModelToolResult([
+				new LanguageModelTextPart(JSON.stringify({
+					status: 'error',
+					error: 'No active JDB session. Call debug_start first.'
+				}, null, 2))
+			]);
+		}
+
 		try {
 			let jdbCommand: string;
-			let message: string;
-			let newStatus: typeof currentState.status;
-			let stopReason: string | null = null;
 
 			switch (action) {
 				case 'run':
 					jdbCommand = 'run';
-					message = 'Starting program execution';
-					newStatus = 'running';
 					break;
-
 				case 'continue':
 					jdbCommand = threadId ? `resume ${threadId}` : 'cont';
-					message = 'Continuing execution';
-					newStatus = 'running';
 					break;
-
 				case 'step_into':
 					jdbCommand = 'step';
-					message = 'Stepping into';
-					newStatus = 'suspended';
-					stopReason = 'step';
 					break;
-
 				case 'step_over':
 					jdbCommand = 'next';
-					message = 'Stepping over';
-					newStatus = 'suspended';
-					stopReason = 'step';
 					break;
-
 				case 'step_out':
 					jdbCommand = 'step up';
-					message = 'Stepping out';
-					newStatus = 'suspended';
-					stopReason = 'step';
 					break;
-
 				case 'pause':
 					jdbCommand = threadId ? `suspend ${threadId}` : 'suspend';
-					message = 'Suspending execution';
-					newStatus = 'suspended';
-					stopReason = 'pause';
 					break;
-
 				case 'terminate':
-					jdbCommand = 'quit';
-					message = 'Terminating debug session';
-					newStatus = 'terminated';
-					break;
-
+					terminateJdbSession(session.sessionId);
+					return new ExtendedLanguageModelToolResult([
+						new LanguageModelTextPart(JSON.stringify({
+							status: 'terminated',
+							message: 'JDB session terminated'
+						}, null, 2))
+					]);
 				default:
 					return new ExtendedLanguageModelToolResult([
 						new LanguageModelTextPart(JSON.stringify({
+							status: 'error',
 							error: `Unknown action: ${action}`
 						}, null, 2))
 					]);
 			}
 
-			// Update state
-			currentState.status = newStatus;
-
-			// Simulate location update for step operations
-			if (stopReason === 'step') {
-				currentState.location = {
-					className: 'Example',
-					method: 'exampleMethod',
-					line: 42,
-					file: 'Example.java'
-				};
-			}
-
-			const result = {
-				status: newStatus,
-				stopReason,
-				jdbCommand,
-				message,
-				location: currentState.location,
-				threadId: threadId || currentState.currentThread,
-				instructions: action === 'terminate'
-					? 'Debug session ended.'
-					: `Execute in JDB: ${jdbCommand}\n` +
-					  'After execution, use debug_inspect to examine program state.'
-			};
-
-			console.log('[DebugControlTool] Result:', result);
+			// Send command to JDB and wait for response
+			// Use longer timeout for run/continue as they wait for breakpoint
+			const timeout = (action === 'run' || action === 'continue') ? 30000 : 5000;
+			const result = await sendJdbCommand(session.sessionId, jdbCommand, timeout);
 
 			return new ExtendedLanguageModelToolResult([
-				new LanguageModelTextPart(JSON.stringify(result, null, 2))
+				new LanguageModelTextPart(JSON.stringify({
+					status: result.success ? 'success' : 'error',
+					action,
+					jdbCommand,
+					jdbOutput: result.output,
+					error: result.error
+				}, null, 2))
 			]);
 
 		} catch (error) {
@@ -130,6 +96,7 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 
 			return new ExtendedLanguageModelToolResult([
 				new LanguageModelTextPart(JSON.stringify({
+					status: 'error',
 					error: `Failed to execute ${action}: ${errorMessage}`
 				}, null, 2))
 			]);
@@ -154,15 +121,6 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 	async resolveInput(input: IDebugControlParams, _promptContext: IBuildPromptContext, _mode: CopilotToolMode): Promise<IDebugControlParams> {
 		return input;
 	}
-}
-
-// Export for other tools to check state
-export function getDebugState() {
-	return { ...currentState };
-}
-
-export function setDebugState(state: Partial<typeof currentState>) {
-	currentState = { ...currentState, ...state };
 }
 
 ToolRegistry.registerTool(DebugControlTool);

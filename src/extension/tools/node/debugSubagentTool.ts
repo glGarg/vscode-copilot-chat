@@ -53,7 +53,6 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			ToolName.DebugThreads,
 			// Terminal for building and running JDB commands
 			ToolName.CoreRunInTerminal,
-			ToolName.CoreGetTerminalOutput,
 			// Code navigation tools
 			ToolName.ReadFile,
 			ToolName.FindFiles,

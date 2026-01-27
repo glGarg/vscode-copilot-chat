@@ -16,7 +16,9 @@ export enum ToolCategory {
 	Debugging = 'Debugging',
 	RedundantButSpecific = 'Redundant but Specific',
 	// Core tools that should not be grouped
-	Core = 'Core'
+	Core = 'Core',
+	// Internal tools that should not be exposed to the main agent (only available to subagents)
+	Internal = 'Internal'
 }
 
 export enum ToolName {
@@ -223,13 +225,14 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.FindTestFiles]: ToolCategory.Testing,
 	[ToolName.CoreRunTest]: ToolCategory.Testing,
 
-	// Debugging
+	// Debugging - only debug_subagent exposed to main agent
 	[ToolName.DebugSubagent]: ToolCategory.Debugging,
-	[ToolName.DebugStart]: ToolCategory.Debugging,
-	[ToolName.DebugBreakpoint]: ToolCategory.Debugging,
-	[ToolName.DebugControl]: ToolCategory.Debugging,
-	[ToolName.DebugInspect]: ToolCategory.Debugging,
-	[ToolName.DebugThreads]: ToolCategory.Debugging,
+	// Internal debug tools - only available to debug_subagent, not main agent
+	[ToolName.DebugStart]: ToolCategory.Internal,
+	[ToolName.DebugBreakpoint]: ToolCategory.Internal,
+	[ToolName.DebugControl]: ToolCategory.Internal,
+	[ToolName.DebugInspect]: ToolCategory.Internal,
+	[ToolName.DebugThreads]: ToolCategory.Internal,
 
 	// Redundant but Specific
 	[ToolName.DocInfo]: ToolCategory.RedundantButSpecific,

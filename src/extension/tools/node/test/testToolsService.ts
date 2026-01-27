@@ -234,5 +234,8 @@ export function getPackagejsonToolsForTest() {
 	tools.add(ToolName.CoreRunTest);
 	tools.add(ToolName.CoreManageTodoList);
 
+	// Add editing tools - ApplyPatch is the primary editing tool for agent mode
+	tools.add(ToolName.ApplyPatch);
+
 	return tools;
 }

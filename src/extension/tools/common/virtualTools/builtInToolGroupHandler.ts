@@ -36,6 +36,8 @@ function getCategorySummary(category: ToolCategory): string {
 		}
 		case ToolCategory.Core:
 			return 'Core tools that should always be available without grouping.';
+		case ToolCategory.Internal:
+			return 'Internal tools that are only available to subagents.';
 		default:
 			return assertNever(category);
 	}
@@ -55,7 +57,11 @@ export class BuiltInToolGroupHandler {
 		const builtInTools = tools.filter(t => toolCategories.hasOwnProperty(t.name));
 
 		// Filter out Core tools from grouping (they should remain individual)
-		const toolsToGroup = builtInTools.filter(t => toolCategories[t.name as ToolName] !== ToolCategory.Core);
+		// Filter out Internal tools entirely (they are only for subagents, not main agent)
+		const toolsToGroup = builtInTools.filter(t => 
+			toolCategories[t.name as ToolName] !== ToolCategory.Core &&
+			toolCategories[t.name as ToolName] !== ToolCategory.Internal
+		);
 		const coreTools = builtInTools.filter(t => toolCategories[t.name as ToolName] === ToolCategory.Core);
 
 		const categories = groupBy(toolsToGroup, t => toolCategories[t.name as ToolName]);

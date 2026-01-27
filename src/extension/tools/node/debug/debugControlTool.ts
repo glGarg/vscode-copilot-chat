@@ -29,10 +29,13 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 		const session = getActiveJdbSession();
 		if (!session) {
 			return new ExtendedLanguageModelToolResult([
-				new LanguageModelTextPart(JSON.stringify({
-					status: 'error',
-					error: 'No active JDB session. Call debug_start first.'
-				}, null, 2))
+				new LanguageModelTextPart(
+					`❌ NO JDB SESSION\n\n` +
+					`You must start a debug session first:\n` +
+					`1. Start test in background: mvn test -Dtest=TestClass#method -Dmaven.surefire.debug > /tmp/test.log 2>&1 &\n` +
+					`2. Wait: sleep 5\n` +
+					`3. Attach: debug_start({mode: "attach", port: 5005})`
+				)
 			]);
 		}
 
@@ -80,14 +83,59 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 			const timeout = (action === 'run' || action === 'continue') ? 30000 : 5000;
 			const result = await sendJdbCommand(session.sessionId, jdbCommand, timeout);
 
+			// Parse output for LLM-friendly response
+			const output = result.output || '';
+			let statusMessage: string;
+
+			if (action === 'continue' || action === 'run') {
+				if (output.includes('Breakpoint hit')) {
+					// Extract breakpoint location
+					const match = output.match(/Breakpoint hit:.*?"thread=([^"]+)".*?(\S+)\(\),\s*line=(\d+)/);
+					if (match) {
+						const [, thread, method, line] = match;
+						statusMessage = `🎯 BREAKPOINT HIT!\n\n` +
+							`Location: ${method}() at line ${line}\n` +
+							`Thread: ${thread}\n\n` +
+							`Now you can inspect:\n` +
+							`- debug_inspect({action: "locals"}) - see local variables\n` +
+							`- debug_inspect({action: "eval", expression: "varName"}) - evaluate expression\n` +
+							`- debug_inspect({action: "stack"}) - see call stack\n` +
+							`- debug_control({action: "step_over"}) - execute next line\n` +
+							`- debug_control({action: "continue"}) - continue to next breakpoint`;
+					} else {
+						statusMessage = `🎯 BREAKPOINT HIT!\n\n${output.trim()}\n\nUse debug_inspect to examine state.`;
+					}
+				} else if (output.includes('The application exited')) {
+					statusMessage = `⚠️ APPLICATION EXITED - No breakpoint was hit\n\n` +
+						`The test ran to completion without hitting any breakpoints.\n` +
+						`Possible reasons:\n` +
+						`1. Breakpoint location is not executed by this test\n` +
+						`2. Class name or method name was incorrect\n` +
+						`3. The test completes before reaching the breakpoint\n\n` +
+						`Try setting a breakpoint earlier in the call chain or on the test method itself.`;
+				} else if (output.includes('Set deferred breakpoint')) {
+					statusMessage = `▶️ RUNNING - Deferred breakpoints now active\n\n` +
+						`JDB output: ${output.trim()}\n\n` +
+						`Waiting for breakpoint to hit...`;
+				} else {
+					statusMessage = `▶️ EXECUTION ${action.toUpperCase()}ED\n\n${output.trim() || 'No output'}`;
+				}
+			} else if (action === 'step_into' || action === 'step_over' || action === 'step_out') {
+				// Extract current location after step
+				const match = output.match(/Step completed:.*?(\S+)\(\),\s*line=(\d+)/);
+				if (match) {
+					const [, method, line] = match;
+					statusMessage = `👣 STEPPED to ${method}() line ${line}\n\n` +
+						`Use debug_inspect({action: "locals"}) to see variables at this location.`;
+				} else {
+					statusMessage = `👣 STEP ${action.replace('_', ' ').toUpperCase()}\n\n${output.trim() || 'Step completed'}`;
+				}
+			} else {
+				statusMessage = `✅ ${action.toUpperCase()} completed\n\n${output.trim() || 'No output'}`;
+			}
+
 			return new ExtendedLanguageModelToolResult([
-				new LanguageModelTextPart(JSON.stringify({
-					status: result.success ? 'success' : 'error',
-					action,
-					jdbCommand,
-					jdbOutput: result.output,
-					error: result.error
-				}, null, 2))
+				new LanguageModelTextPart(statusMessage)
 			]);
 
 		} catch (error) {

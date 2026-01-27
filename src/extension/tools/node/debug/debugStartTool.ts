@@ -88,25 +88,36 @@ class DebugStartTool implements ICopilotTool<IDebugStartParams> {
 				const result = await attachJdbSession(sessionId, port, host, workingDir);
 
 				if (!result.success) {
+					// Provide clear, actionable error message
+					const isConnectionRefused = result.output?.includes('Connection refused') || result.error?.includes('Connection refused');
+					const friendlyError = isConnectionRefused
+						? `Cannot connect to port ${port}. The target JVM is not running or not listening for debugger connections.`
+						: `Failed to attach: ${result.error}`;
+					
 					return new ExtendedLanguageModelToolResult([
-						new LanguageModelTextPart(JSON.stringify({
-							sessionId: null,
-							status: 'error',
-							message: `Failed to attach JDB to ${host}:${port}: ${result.error}`,
-							output: result.output,
-							hint: 'Make sure the target JVM is running with debug agent. For Maven: mvn test -Dmaven.surefire.debug. For Gradle: ./gradlew test --debug-jvm'
-						}, null, 2))
+						new LanguageModelTextPart(
+							`❌ ATTACH FAILED\n\n` +
+							`Error: ${friendlyError}\n\n` +
+							`To fix this:\n` +
+							`1. First start the test in BACKGROUND with debug agent:\n` +
+							`   Maven: mvn test -Dtest=TestClass#method -Dmaven.surefire.debug > /tmp/test.log 2>&1 &\n` +
+							`   Gradle: ./gradlew test --tests "TestClass.method" --debug-jvm > /tmp/test.log 2>&1 &\n` +
+							`2. Wait 5-10 seconds for JVM to start\n` +
+							`3. Then call debug_start again`
+						)
 					]);
 				}
 
 				return new ExtendedLanguageModelToolResult([
-					new LanguageModelTextPart(JSON.stringify({
-						sessionId,
-						status: 'attached',
-						message: `JDB attached to ${host}:${port}`,
-						output: result.output,
-						hint: 'Use debug_breakpoint to set breakpoints, then debug_control action="continue" to resume execution'
-					}, null, 2))
+					new LanguageModelTextPart(
+						`✅ JDB ATTACHED SUCCESSFULLY\n\n` +
+						`Connected to JVM at ${host}:${port}\n` +
+						`Session: ${sessionId}\n\n` +
+						`Next steps:\n` +
+						`1. Set breakpoints: debug_breakpoint({action: "set", className: "MyClass", method: "myMethod"})\n` +
+						`2. Resume execution: debug_control({action: "continue"})\n` +
+						`3. When breakpoint hits, inspect: debug_inspect({action: "locals"}) or debug_inspect({action: "eval", expression: "varName"})`
+					)
 				]);
 
 			} else {

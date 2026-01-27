@@ -42,7 +42,12 @@ class DebugBreakpointTool implements ICopilotTool<IDebugBreakpointParams> {
 		// Get active JDB session
 		const session = getActiveJdbSession();
 		if (!session) {
-			return this.errorResult('No active JDB session. Call debug_start first to start a JDB session.');
+			return this.errorResult(
+				'No active JDB session.\n\n' +
+				'Start a debug session first:\n' +
+				'1. Run test with debug agent in background\n' +
+				'2. Call debug_start({mode: "attach", port: 5005})'
+			);
 		}
 
 		try {
@@ -86,13 +91,27 @@ class DebugBreakpointTool implements ICopilotTool<IDebugBreakpointParams> {
 						return this.errorResult(`Failed to set breakpoint: ${result.error}`);
 					}
 
+					// Parse JDB output for LLM-friendly response
+					const output = result.output || '';
+					const isDeferred = output.includes('Deferring breakpoint');
+					const isSet = output.includes('Set breakpoint') || output.includes('Breakpoint set');
+					
+					let statusMessage: string;
+					if (isDeferred) {
+						statusMessage = `⏳ BREAKPOINT DEFERRED at ${locationDesc}\n\n` +
+							`The class is not yet loaded. The breakpoint will activate when the class loads.\n` +
+							`This is normal - proceed with: debug_control({action: "continue"})`;
+					} else if (isSet) {
+						statusMessage = `✅ BREAKPOINT SET at ${locationDesc}\n\n` +
+							`Ready to debug. Use: debug_control({action: "continue"}) to run until breakpoint hits.`;
+					} else {
+						statusMessage = `✅ BREAKPOINT COMMAND SENT: ${jdbCommand}\n\n` +
+							`JDB response: ${output.trim()}\n\n` +
+							`Use: debug_control({action: "continue"}) to run.`;
+					}
+
 					return new ExtendedLanguageModelToolResult([
-						new LanguageModelTextPart(JSON.stringify({
-							status: 'success',
-							message: `Breakpoint set at ${locationDesc}`,
-							jdbCommand,
-							jdbOutput: result.output
-						}, null, 2))
+						new LanguageModelTextPart(statusMessage)
 					]);
 				}
 
@@ -156,7 +175,7 @@ class DebugBreakpointTool implements ICopilotTool<IDebugBreakpointParams> {
 
 	private errorResult(message: string) {
 		return new ExtendedLanguageModelToolResult([
-			new LanguageModelTextPart(JSON.stringify({ status: 'error', error: message }, null, 2))
+			new LanguageModelTextPart(`❌ ERROR: ${message}`)
 		]);
 	}
 

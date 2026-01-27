@@ -30,7 +30,12 @@ class DebugInspectTool implements ICopilotTool<IDebugInspectParams> {
 		// Get active JDB session
 		const session = getActiveJdbSession();
 		if (!session) {
-			return this.errorResult('No active JDB session. Call debug_start first.');
+			return this.errorResult(
+				'No active JDB session.\n\n' +
+				'Start a debug session first:\n' +
+				'1. Run test with debug agent in background\n' +
+				'2. Call debug_start({mode: "attach", port: 5005})'
+			);
 		}
 
 		try {
@@ -62,14 +67,58 @@ class DebugInspectTool implements ICopilotTool<IDebugInspectParams> {
 			// Send command to JDB
 			const result = await sendJdbCommand(session.sessionId, jdbCommand);
 
+			// Parse output for LLM-friendly response
+			const output = result.output || '';
+			let statusMessage: string;
+
+			switch (action) {
+				case 'locals': {
+					if (output.includes('No local variables')) {
+						statusMessage = `📋 LOCAL VARIABLES: None\n\n` +
+							`No local variables at this point in execution.\n` +
+							`Try: debug_inspect({action: "this"}) to see instance fields, or\n` +
+							`     debug_control({action: "step_over"}) to advance and check again.`;
+					} else {
+						// Parse variable list for cleaner display
+						const lines = output.split('\n').filter(l => l.trim() && !l.includes('main['));
+						statusMessage = `📋 LOCAL VARIABLES:\n\n${lines.join('\n') || 'None found'}`;
+					}
+					break;
+				}
+				case 'eval': {
+					// Clean up the print output
+					const cleanOutput = output.replace(/\s*main\[\d+\]\s*$/, '').trim();
+					const exprName = expression || 'expression';
+					if (cleanOutput.includes(' = ')) {
+						statusMessage = `🔍 EVALUATED: ${cleanOutput}`;
+					} else if (cleanOutput.includes('null')) {
+						statusMessage = `🔍 ${exprName} = null`;
+					} else {
+						statusMessage = `🔍 ${exprName} = ${cleanOutput}`;
+					}
+					break;
+				}
+				case 'stack': {
+					const lines = output.split('\n').filter(l => l.trim() && !l.includes('main['));
+					statusMessage = `📚 CALL STACK:\n\n${lines.map((l, i) => `${i + 1}. ${l.trim()}`).join('\n') || 'Empty stack'}`;
+					break;
+				}
+				case 'this': {
+					const cleanOutput = output.replace(/\s*main\[\d+\]\s*$/, '').trim();
+					statusMessage = `📦 THIS OBJECT:\n\n${cleanOutput || 'Not available (static context?)'}`;
+					break;
+				}
+				case 'fields': {
+					const cleanOutput = output.replace(/\s*main\[\d+\]\s*$/, '').trim();
+					statusMessage = `📦 OBJECT FIELDS:\n\n${cleanOutput || 'No fields found'}`;
+					break;
+				}
+				default:
+					statusMessage = output.trim();
+			}
+
 			return new ExtendedLanguageModelToolResult([
-				new LanguageModelTextPart(JSON.stringify({
-					status: result.success ? 'success' : 'error',
-					action,
-					jdbCommand,
-					output: result.output,
-					error: result.error
-				}, null, 2))
+				new LanguageModelTextPart(statusMessage)
 			]);
 
 		} catch (error) {
@@ -81,7 +130,7 @@ class DebugInspectTool implements ICopilotTool<IDebugInspectParams> {
 
 	private errorResult(message: string) {
 		return new ExtendedLanguageModelToolResult([
-			new LanguageModelTextPart(JSON.stringify({ status: 'error', error: message }, null, 2))
+			new LanguageModelTextPart(`❌ ERROR: ${message}`)
 		]);
 	}
 

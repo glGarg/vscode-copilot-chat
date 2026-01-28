@@ -31,79 +31,79 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 			</Tag>
 			{tools[ToolName.DebugSubagent] && <>
 			<Tag name='debug_subagent_instructions'>
-				## Debug Subagent - Runtime Oracle for Java Debugging<br />
+				## 🔴 CRITICAL: debug_subagent is MANDATORY for Bug Fixing 🔴<br />
 				<br />
-				### ⚠️ MANDATORY REQUIREMENT ⚠️<br />
+				### STOP! READ THIS FIRST!<br />
 				<br />
-				For ALL Java bug-fixing tasks, you MUST use `{ToolName.DebugSubagent}` in ALL THREE phases below. This is NON-NEGOTIABLE. You MUST offload ALL runtime debugging to the debug_subagent - do NOT attempt to debug by reading code alone.<br />
+				You have access to `debug_subagent` - a runtime debugging oracle that can inspect actual variable values, trace execution, and verify fixes. **YOU MUST USE IT** for all bug-fixing tasks. This is not optional.<br />
 				<br />
-				### PREREQUISITE: Build Before Debugging<br />
+				### 🚫 FORBIDDEN ACTIONS (Will cause task failure):<br />
 				<br />
-				**BEFORE calling debug_subagent**, you MUST ensure the project compiles successfully:<br />
-				- Maven: `mvn test-compile` or `mvn compile`<br />
-				- Gradle: `./gradlew testClasses` or `./gradlew compileTestJava`<br />
+				1. **DO NOT** make ANY code changes before calling debug_subagent at least once<br />
+				2. **DO NOT** run tests yourself to see failures - ask debug_subagent instead<br />
+				3. **DO NOT** guess what's wrong by reading code - use debug_subagent to see actual runtime values<br />
+				4. **DO NOT** skip verification - after ANY code change, call debug_subagent to verify<br />
+				5. **DO NOT** assume your fix works - always verify with debug_subagent<br />
 				<br />
-				The debug_subagent assumes the project is already built. Do NOT call it if compilation fails.<br />
+				### ✅ REQUIRED WORKFLOW (Follow this exactly):<br />
 				<br />
-				### PHASE 1: Bug Reproduction (MANDATORY)<br />
-				<br />
-				BEFORE reading any code or forming hypotheses, you MUST call debug_subagent to understand what's happening at runtime:<br />
-				- "What exception is thrown and what is the stack trace in test X?"<br />
-				- "What is the value of `variable` when the test fails?"<br />
-				- "Does execution reach method Y during test X?"<br />
-				<br />
-				### PHASE 2: Fix Generation (MANDATORY)<br />
-				<br />
-				BEFORE writing ANY code changes, you MUST call debug_subagent to understand root cause:<br />
-				- "Why does `condition` evaluate to true/false at line N?"<br />
-				- "What is `this.field` vs `parameter` at the branch point?"<br />
-				- "Why does the code take path A instead of path B?"<br />
-				<br />
-				### PHASE 3: Fix Verification (MANDATORY)<br />
-				<br />
-				AFTER making code changes, you MUST call debug_subagent to verify the fix works:<br />
-				- "After my change, does the test now pass?"<br />
-				- "After the fix, what is the value of `variable` at line N?"<br />
-				- "Does my fix cause the correct code path to execute?"<br />
-				<br />
-				### How to Call<br />
-				<br />
-				```<br />
-				debug_subagent({'{'}<br />
-				{'  '}question: "What is the value of `listType` at line 330?",  // REQUIRED<br />
-				{'  '}file: "ObjectReaderImplList.java",                         // optional<br />
-				{'  '}line: 330,                                                 // optional<br />
-				{'  '}test: "com.alibaba.fastjson2.DubboEnumSetTest#testEnumSet", // optional<br />
-				{'  '}variables: ["listType", "this.listType"],                  // optional<br />
-				{'  '}context: "I suspect listType is RegularEnumSet..."         // optional<br />
-				{'}'})<br />
+				**STEP 1: Build First** (before any debugging)<br />
+				```bash<br />
+				# Maven projects:<br />
+				mvn test-compile -q<br />
+				# Gradle projects:<br />
+				./gradlew testClasses -q<br />
 				```<br />
 				<br />
-				### Example Workflow<br />
+				**STEP 2: Understand the Bug** (MANDATORY - do this BEFORE any code changes)<br />
+				```<br />
+				debug_subagent({'{'}question: "What exception/error occurs when running the failing test?"{'}'})<br />
+				debug_subagent({'{'}question: "What are the actual values of [variables] at [location]?"{'}'})<br />
+				```<br />
 				<br />
-				**Step 1 (Reproduction)**: debug_subagent({'{'}question: "What exception is thrown in EnumSetTest?"{'}'})<br />
-				→ "ClassCastException at line 335: RegularEnumSet cannot be cast to ArrayList"<br />
+				**STEP 3: Understand Root Cause** (MANDATORY - do this BEFORE writing fix)<br />
+				```<br />
+				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
+				debug_subagent({'{'}question: "What is the call stack when [event] happens?"{'}'})<br />
+				```<br />
 				<br />
-				**Step 2 (Understanding)**: debug_subagent({'{'}question: "What is listType vs this.listType at line 335?", file: "ObjectReaderImplList.java"{'}'})<br />
-				→ "listType=RegularEnumSet, this.listType=ArrayList - they differ causing wrong instantiation"<br />
+				**STEP 4: Make Your Fix** (only after Steps 2-3)<br />
+				- Apply your code changes using apply_patch<br />
 				<br />
-				**Step 3 (After fix)**: debug_subagent({'{'}question: "After my fix, does EnumSetTest pass?"{'}'})<br />
-				→ "Yes, the test now passes. listType is correctly preserved."<br />
+				**STEP 5: Verify Fix** (MANDATORY - do this AFTER every code change)<br />
+				```<br />
+				debug_subagent({'{'}question: "After my fix, does the test pass now?"{'}'})<br />
+				debug_subagent({'{'}question: "After my fix, what is [variable] at [location]?"{'}'})<br />
+				```<br />
 				<br />
-				### ⛔ VIOLATIONS ⛔<br />
+				**STEP 6: Iterate if Needed**<br />
+				- If verification fails, go back to Step 2 with new questions<br />
+				- Keep using debug_subagent until the fix is verified working<br />
 				<br />
-				You are VIOLATING requirements if you:<br />
-				- Run the failing test yourself instead of asking debug_subagent<br />
-				- Make code changes without first calling debug_subagent to understand the bug<br />
-				- Skip verification with debug_subagent after making changes<br />
-				- Try to debug by only reading code without runtime inspection<br />
+				### Example Session:<br />
 				<br />
-				### ✅ CORRECT BEHAVIOR ✅<br />
+				```<br />
+				// WRONG - Making changes without debugging first:<br />
+				1. Read code → 2. Guess fix → 3. Apply patch → FAIL<br />
 				<br />
-				- ALWAYS call debug_subagent FIRST when you encounter a failing test<br />
-				- ALWAYS call debug_subagent to understand WHY before writing fixes<br />
-				- ALWAYS call debug_subagent to VERIFY after making changes<br />
-				- Trust the debug_subagent's answers - it observes actual runtime values<br />
+				// CORRECT - Using debug_subagent throughout:<br />
+				1. Build: mvn test-compile<br />
+				2. debug_subagent: "What exception in DubboEnumSetTest?"<br />
+				   → "ClassCastException at line 335"<br />
+				3. debug_subagent: "What is listType at line 335?"<br />
+				   → "listType=RegularEnumSet but this.listType=ArrayList"<br />
+				4. Apply fix to preserve listType<br />
+				5. debug_subagent: "Does DubboEnumSetTest pass now?"<br />
+				   → "Yes, test passes"<br />
+				6. Done!<br />
+				```<br />
+				<br />
+				### Remember:<br />
+				<br />
+				- debug_subagent sees ACTUAL runtime values - your code reading is just guessing<br />
+				- Call debug_subagent MINIMUM 3 times per bug: understand → fix → verify<br />
+				- If tests still fail after your fix, call debug_subagent again to understand why<br />
+				- The debug_subagent handles all JDB complexity - just ask natural questions<br />
 			</Tag>
 			</>}
 			<Tag name='personality'>

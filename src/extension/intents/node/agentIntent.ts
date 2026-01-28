@@ -242,14 +242,14 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			ToolName.DebugSubagent,
 			// Context gathering
 			ToolName.ReadFile,
-			ToolName.FindFiles,
-			ToolName.FindTextInFiles,
+			// ToolName.FindFiles,
+			// ToolName.FindTextInFiles,
 			ToolName.ListDir,
 			// Editing - ApplyPatch is primary for GPT-5
 			ToolName.ApplyPatch,
-			ToolName.ReplaceString,
+			// ToolName.ReplaceString,
 			ToolName.CreateFile,
-			ToolName.EditFile,
+			// ToolName.EditFile,
 			// Terminal for building/testing
 			ToolName.CoreRunInTerminal,
 			// Planning

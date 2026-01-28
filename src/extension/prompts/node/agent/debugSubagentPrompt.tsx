@@ -90,6 +90,8 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					debug_control({'{'}action: "step_over"{'}'})<br />
 					```<br />
 					<br />
+					**Restarting**: To start over with different breakpoints, just call debug_start_session again - it automatically cleans up the previous session.<br />
+					<br />
 					**Step 4: Answer** - When done, report findings in &lt;debug_answer&gt; tag<br />
 					<br />
 					## Tools Available<br />

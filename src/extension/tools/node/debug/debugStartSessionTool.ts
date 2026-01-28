@@ -80,8 +80,9 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				activeTestProcess = null;
 			}
 
-			// Determine working directory
-			const cwd = workingDir || process.cwd();
+			// Determine working directory - default to /testbed (benchmark workspace)
+			const cwd = workingDir || '/testbed';
+			console.log('[DebugStartSessionTool] Working directory:', cwd);
 
 			// Step 1: Detect build system (just for running test, not building)
 			const buildSystem = this.detectBuildSystem(cwd);

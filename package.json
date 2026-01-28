@@ -246,7 +246,7 @@
 				"icon": "$(debug-start)",
 				"canBeReferencedInPrompt": false,
 				"userDescription": "Start a complete Java debug session with initial breakpoints",
-				"modelDescription": "Start a complete Java debug session atomically. This tool handles everything in one call:\n1. Starts the test with debug agent (suspend=y)\n2. Waits for debug port to be ready\n3. Attaches JDB\n4. Sets all initial breakpoints\n5. Continues execution until first breakpoint hit\n\nThis eliminates race conditions between attach and breakpoint setting.\n\nIMPORTANT: The project must already be compiled before calling this tool.",
+				"modelDescription": "Start a complete Java debug session atomically. This tool handles everything in one call:\n1. Starts the test with debug agent (suspend=y)\n2. Waits for debug port to be ready\n3. Attaches JDB\n4. Sets all initial breakpoints\n5. Continues execution until first breakpoint hit\n\nThis eliminates race conditions between attach and breakpoint setting.\n\nIMPORTANT: The project must already be compiled before calling this tool.\n\nTo restart with different breakpoints, just call this tool again - it automatically cleans up the previous session.",
 				"tags": [
 					"debugging"
 				],

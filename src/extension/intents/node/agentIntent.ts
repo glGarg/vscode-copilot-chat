@@ -245,12 +245,15 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			ToolName.FindFiles,
 			ToolName.FindTextInFiles,
 			ToolName.ListDir,
-			// Editing
+			// Editing - ApplyPatch is primary for GPT-5
+			ToolName.ApplyPatch,
 			ToolName.ReplaceString,
 			ToolName.CreateFile,
 			ToolName.EditFile,
 			// Terminal for building/testing
 			ToolName.CoreRunInTerminal,
+			// Planning
+			ToolName.CoreManageTodoList,
 		]);
 		
 		return allTools.filter(tool => allowedTools.has(tool.name as ToolName));

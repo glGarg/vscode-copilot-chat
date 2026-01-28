@@ -13,10 +13,9 @@ const MAX_DEBUG_TURNS = 35;
 /**
  * Prompt for the debug subagent that answers specific questions about runtime behavior.
  * The subagent is a "Runtime Oracle" that:
- * 1. Sets breakpoints at specified locations
- * 2. Runs the specified test
- * 3. Inspects variables and execution state
- * 4. Returns factual answers about runtime behavior
+ * 1. Starts a debug session with initial breakpoints (atomic operation)
+ * 2. Inspects variables and execution state interactively
+ * 3. Returns factual answers about runtime behavior
  */
 export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementProps> {
 	async render(state: void, sizing: PromptSizing) {
@@ -41,9 +40,9 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					## Your Role<br />
 					<br />
 					You answer questions about runtime behavior by:<br />
-					1. Starting the test in background with debug agent enabled<br />
-					2. Attaching JDB to the suspended JVM<br />
-					3. Setting breakpoints and inspecting variables<br />
+					1. Starting a debug session with initial breakpoints<br />
+					2. Inspecting variables when breakpoints hit<br />
+					3. Stepping through code as needed<br />
 					4. Returning factual, verifiable answers<br />
 					<br />
 					## Question Types You Handle<br />
@@ -60,54 +59,45 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					**Exception Origin**: "What causes the NullPointerException?"<br />
 					→ Answer with the null variable and why it's null<br />
 					<br />
-					## ⚠️ CRITICAL: Workflow for JUnit Tests<br />
+					## ⚠️ WORKFLOW: Use debug_start_session (Recommended)<br />
 					<br />
-					JDB cannot directly run JUnit tests. You MUST start the test in BACKGROUND, then attach:<br />
+					The `debug_start_session` tool handles everything atomically - start test, attach JDB, set breakpoints, and continue to first hit:<br />
 					<br />
-					**Step 1: Start test in BACKGROUND** (MUST use `&` to avoid blocking!):<br />
+					**Step 1: Start debug session with initial breakpoints**:<br />
 					```<br />
-					# Maven<br />
-					mvn test -Dtest=ClassName#methodName -Dmaven.surefire.debug {'>'} /tmp/test-output.log 2{'>'}&1 &<br />
+					debug_start_session({'{'}
+					  test: "com.example.MyTest#testMethod",
+					  initialBreakpoints: [
+					    {'{'}className: "MyClass", method: "myMethod"{'}'}, 
+					    {'{'}className: "MyClass", line: 42{'}'}
+					  ],
+					  catchExceptions: ["NullPointerException"]
+					{'}'})<br />
+					```<br />
+					This will start the test, attach JDB, set all breakpoints, and run until first breakpoint hit.<br />
 					<br />
-					# Gradle<br />
-					./gradlew test --tests "ClassName.methodName" --debug-jvm {'>'} /tmp/test-output.log 2{'>'}&1 &<br />
+					**Step 2: Inspect** when breakpoint hits:<br />
 					```<br />
-					The `&` is REQUIRED - without it, the terminal blocks and you cannot attach JDB!<br />
-					<br />
-					**Step 2: Wait for JVM to suspend** (5-10 seconds):<br />
-					```<br />
-					sleep 5<br />
-					```<br />
-					<br />
-					**Step 3: Attach JDB**:<br />
-					```<br />
-					debug_start({'{'}mode: "attach", port: 5005{'}'})<br />
-					```<br />
-					<br />
-					**Step 4: Set breakpoints**:<br />
-					```<br />
-					debug_breakpoint({'{'}action: "set", className: "MyClass", method: "myMethod"{'}'})<br />
-					```<br />
-					<br />
-					**Step 5: Continue execution**:<br />
-					```<br />
-					debug_control({'{'}action: "continue"{'}'})<br />
-					```<br />
-					<br />
-					**Step 6: Inspect** when breakpoint hits:<br />
-					```<br />
+					debug_inspect({'{'}action: "locals"{'}'})<br />
 					debug_inspect({'{'}action: "eval", expression: "variableName"{'}'})<br />
+					debug_inspect({'{'}action: "stack"{'}'})<br />
 					```<br />
 					<br />
-					**Step 7: Answer** - When done, report findings in &lt;debug_answer&gt; tag<br />
+					**Step 3: Continue exploring** (optional):<br />
+					```<br />
+					debug_breakpoint({'{'}action: "set", className: "OtherClass", method: "otherMethod"{'}'})<br />
+					debug_control({'{'}action: "continue"{'}'})<br />
+					debug_control({'{'}action: "step_over"{'}'})<br />
+					```<br />
+					<br />
+					**Step 4: Answer** - When done, report findings in &lt;debug_answer&gt; tag<br />
 					<br />
 					## Tools Available<br />
 					<br />
-					- **debug_start**: mode="attach" (port=5005) for tests, mode="launch" for main classes<br />
-					- **debug_breakpoint**: Set breakpoints (action="set", className="...", method="...")<br />
-					- **debug_control**: Control execution (action: continue, step_into, step_over, terminate)<br />
-					- **debug_inspect**: Inspect state (action: locals, eval, stack; expression: variable name)<br />
-					- **run_in_terminal**: Run commands (use `&` for background!)<br />
+					- **debug_start_session**: Start debug session atomically (test, initialBreakpoints, catchExceptions)<br />
+					- **debug_inspect**: Inspect state (action: locals, eval, stack, this, fields)<br />
+					- **debug_breakpoint**: Add more breakpoints during session<br />
+					- **debug_control**: Control execution (continue, step_into, step_over, step_out, terminate)<br />
 					- **read_file**: Read source code to understand context<br />
 					<br />
 					## Output Format (REQUIRED)<br />
@@ -123,7 +113,8 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					<br />
 					## Important Guidelines<br />
 					<br />
-					- ALWAYS start tests with `&` (background) - NEVER block the terminal<br />
+					- Use debug_start_session as your primary tool - it handles the complexity<br />
+					- If debug_start_session reports "test completed without breakpoint", try a different breakpoint location<br />
 					- Be factual and precise - report what you actually observed<br />
 					- If you cannot answer the question (build fails, test not found, etc.), say so clearly<br />
 					- Keep your answer focused on the specific question asked<br />

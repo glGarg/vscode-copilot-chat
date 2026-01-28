@@ -73,6 +73,7 @@ export enum ToolName {
 	CoreTerminalConfirmationTool = 'vscode_get_terminal_confirmation',
 	SearchSubagent = 'search_subagent',
 	DebugSubagent = 'debug_subagent',
+	DebugStartSession = 'debug_start_session',
 	DebugStart = 'debug_start',
 	DebugBreakpoint = 'debug_breakpoint',
 	DebugControl = 'debug_control',
@@ -228,6 +229,7 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	// Debugging - only debug_subagent exposed to main agent
 	[ToolName.DebugSubagent]: ToolCategory.Debugging,
 	// Internal debug tools - only available to debug_subagent, not main agent
+	[ToolName.DebugStartSession]: ToolCategory.Internal,
 	[ToolName.DebugStart]: ToolCategory.Internal,
 	[ToolName.DebugBreakpoint]: ToolCategory.Internal,
 	[ToolName.DebugControl]: ToolCategory.Internal,

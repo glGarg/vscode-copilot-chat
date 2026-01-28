@@ -74,14 +74,13 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 
 		// Define the tools available to the debug subagent
 		const allowedTools = new Set([
-			// JDB debugging tools
-			ToolName.DebugStart,
+			// Primary tool: Unified debug session (atomic: start test + attach + breakpoints + continue)
+			ToolName.DebugStartSession,
+			// Interactive debugging tools (for exploration after session starts)
 			ToolName.DebugBreakpoint,
 			ToolName.DebugControl,
 			ToolName.DebugInspect,
 			ToolName.DebugThreads,
-			// Terminal for building and running JDB commands
-			ToolName.CoreRunInTerminal,
 			// Code navigation tools
 			ToolName.ReadFile,
 			ToolName.FindFiles,

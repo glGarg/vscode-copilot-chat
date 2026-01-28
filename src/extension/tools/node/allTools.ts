@@ -10,6 +10,7 @@ import './createFileTool';
 import './debug/debugBreakpointTool';
 import './debug/debugControlTool';
 import './debug/debugInspectTool';
+import './debug/debugStartSessionTool';
 import './debug/debugStartTool';
 import './debug/debugThreadsTool';
 import './debugSubagentTool';

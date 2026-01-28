@@ -264,7 +264,7 @@
 								"properties": {
 									"className": {
 										"type": "string",
-										"description": "Fully qualified or simple class name"
+										"description": "MUST be fully qualified class name (e.g., 'com.example.MyClass'). Simple names will NOT work!"
 									},
 									"method": {
 										"type": "string",
@@ -365,7 +365,7 @@
 						},
 						"className": {
 							"type": "string",
-							"description": "Class name (e.g., 'TypeUtils' or 'com.example.TypeUtils')"
+							"description": "MUST be fully qualified class name (e.g., 'com.example.TypeUtils'). Simple names will NOT work!"
 						},
 						"method": {
 							"type": "string",

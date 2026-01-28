@@ -61,15 +61,19 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					<br />
 					## ⚠️ WORKFLOW: Use debug_start_session (Recommended)<br />
 					<br />
-					The `debug_start_session` tool handles everything atomically - start test, attach JDB, set breakpoints, and continue to first hit:<br />
+					The `debug_start_session` tool handles everything atomically - start test, attach JDB, set breakpoints, and continue to first hit.<br />
+					<br />
+					**IMPORTANT**: A breakpoint is automatically set on the test method entry point. Your target breakpoints are set after that.<br />
+					<br />
+					**CRITICAL**: Use FULLY QUALIFIED class names for breakpoints (e.g., `com.example.MyClass` not just `MyClass`). JDB will not match simple names!<br />
 					<br />
 					**Step 1: Start debug session with initial breakpoints**:<br />
 					```<br />
 					debug_start_session({'{'}
 					  test: "com.example.MyTest#testMethod",
 					  initialBreakpoints: [
-					    {'{'}className: "MyClass", method: "myMethod"{'}'}, 
-					    {'{'}className: "MyClass", line: 42{'}'}
+					    {'{'}className: "com.example.MyClass", method: "myMethod"{'}'}, 
+					    {'{'}className: "com.example.MyClass", line: 42{'}'}
 					  ],
 					  catchExceptions: ["NullPointerException"]
 					{'}'})<br />
@@ -85,7 +89,7 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					<br />
 					**Step 3: Continue exploring** (optional):<br />
 					```<br />
-					debug_breakpoint({'{'}action: "set", className: "OtherClass", method: "otherMethod"{'}'})<br />
+					debug_breakpoint({'{'}action: "set", className: "com.example.OtherClass", method: "otherMethod"{'}'})<br />
 					debug_control({'{'}action: "continue"{'}'})<br />
 					debug_control({'{'}action: "step_over"{'}'})<br />
 					```<br />

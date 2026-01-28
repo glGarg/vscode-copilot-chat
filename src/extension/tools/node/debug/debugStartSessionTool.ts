@@ -104,12 +104,17 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 			activeTestProcess = testProcess.process;
 
 			// Step 3: Wait for debug port to be ready (poll, not fixed sleep!)
-			const portReady = await this.waitForPort(port, 30000);
+			// Use 90 seconds to allow for first-time compilation/dependency download
+			const portReady = await this.waitForPort(port, 90000);
 			if (!portReady) {
 				this.cleanupTestProcess();
 				return this.errorResult(
-					`Debug port ${port} not ready after 30 seconds.\n\n` +
-					`The test may have failed to start or crashed.\n\n` +
+					`Debug port ${port} not ready after 90 seconds.\n\n` +
+					`The test may have failed to start or crashed.\n` +
+					`Common causes:\n` +
+					`- Test class not found (check fully qualified name)\n` +
+					`- Compilation errors (run 'mvn compile test-compile' first)\n` +
+					`- Port already in use\n\n` +
 					`Test output:\n${testProcess.output}`
 				);
 			}
@@ -122,9 +127,23 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				return this.errorResult(`Failed to attach JDB: ${attachResult.error}\n\nOutput: ${attachResult.output}`);
 			}
 
-			// Step 5: Set ALL initial breakpoints ATOMICALLY (no LLM turns between!)
-			// This is the key fix for the race condition
+			// Step 5: TWO-STAGE BREAKPOINT APPROACH
+			// Stage 1: Set breakpoint on test method itself (GUARANTEED to hit)
+			// This ensures we pause inside the test before target classes might finish executing
 			const breakpointResults: string[] = [];
+			const { testClass, testMethod } = this.parseTestName(test);
+			
+			let testMethodBpSet = false;
+			if (testClass && testMethod) {
+				const testBpCmd = `stop in ${testClass}.${testMethod}`;
+				const testBpResult = await sendJdbCommand(sessionId, testBpCmd, 2000);
+				testMethodBpSet = !testBpResult.output?.includes('Unable') && !testBpResult.output?.includes('not found');
+				if (testMethodBpSet) {
+					breakpointResults.push(`${testClass}.${testMethod}() [test entry]: set`);
+				}
+			}
+
+			// Stage 2: Set user's requested breakpoints (may be deferred)
 			for (const bp of initialBreakpoints) {
 				let cmd: string;
 				let desc: string;
@@ -148,8 +167,26 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				breakpointResults.push(`catch ${ex}: set`);
 			}
 
-			// Step 7: Continue execution and wait for breakpoint/exception/completion
-			const result = await this.waitForBreakpointOrCompletion(sessionId, testProcess, timeout * 1000);
+			// Step 7: Continue and handle two-stage stopping
+			let result: DebugSessionResult;
+			
+			if (testMethodBpSet && initialBreakpoints.length > 0) {
+				// Two-stage: First stop at test method, then continue to actual breakpoint
+				const stage1Result = await this.waitForBreakpointOrCompletion(sessionId, testProcess, 30000);
+				
+				if (stage1Result.status === 'breakpoint_hit') {
+					// We hit the test method entry - now continue to actual target breakpoint
+					// The target classes should now be loaded or about to load
+					console.log('[DebugStartSessionTool] Stage 1: Hit test method entry, continuing to target breakpoint...');
+					result = await this.waitForBreakpointOrCompletion(sessionId, testProcess, timeout * 1000);
+				} else {
+					// Test completed or timed out before hitting test method breakpoint
+					result = stage1Result;
+				}
+			} else {
+				// Single stage: Just wait for breakpoint or completion
+				result = await this.waitForBreakpointOrCompletion(sessionId, testProcess, timeout * 1000);
+			}
 
 			// Format and return result
 			return this.formatResult(result, breakpointResults, buildSystem);
@@ -183,6 +220,26 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 		return 'unknown';
 	}
 
+	/**
+	 * Parse test name into class and method components.
+	 * Handles formats like:
+	 * - "com.example.MyTest#testMethod"
+	 * - "MyTest#testMethod"
+	 * - "com.example.MyTest" (class only)
+	 */
+	private parseTestName(test: string): { testClass: string | null; testMethod: string | null } {
+		// Remove any parameters like (String, String)[2]
+		const cleanTest = test.replace(/\(.*\)(\[\d+\])?$/, '');
+		
+		if (cleanTest.includes('#')) {
+			const [testClass, testMethod] = cleanTest.split('#');
+			return { testClass, testMethod };
+		}
+		
+		// Just class name, no method
+		return { testClass: cleanTest, testMethod: null };
+	}
+
 	private async startTestWithDebug(
 		buildSystem: BuildSystem, 
 		test: string, 
@@ -197,13 +254,13 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 			const debugAgent = `-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=${port}`;
 
 			if (buildSystem === 'maven') {
-				// Maven Surefire debug mode - skips compilation with -DskipCompile (already built)
+				// Maven Surefire - use surefire:test goal to skip compile lifecycle
+				// Main agent should have already compiled the project
 				cmd = 'mvn';
 				args = [
-					'test',
+					'surefire:test',  // Direct goal bypasses compile phases
 					`-Dtest=${test}`,
 					`-Dmaven.surefire.debug=${debugAgent}`,
-					'-DskipCompile', // Skip compile - main agent already built
 					'-q' // quiet mode to reduce output noise
 				];
 			} else if (buildSystem === 'gradle') {

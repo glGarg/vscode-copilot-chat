@@ -57,9 +57,10 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				**STEP 2: Understand the Bug** (MANDATORY - do this BEFORE any code changes)<br />
 				```<br />
-				debug_subagent({'{'}question: "What exception/error occurs when running the failing test?"{'}'})<br />
+				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod and what code path leads to it?", test: "com.example.MyTest#testMethod"{'}'})<br />
 				debug_subagent({'{'}question: "What are the actual values of [variables] at [location]?"{'}'})<br />
 				```<br />
+				**IMPORTANT**: Always include the SPECIFIC test name in your question - don't say "the failing test".<br />
 				<br />
 				**STEP 3: Understand Root Cause** (MANDATORY - do this BEFORE writing fix)<br />
 				```<br />

@@ -104,12 +104,12 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 			activeTestProcess = testProcess.process;
 
 			// Step 3: Wait for debug port to be ready (poll, not fixed sleep!)
-			// Use 90 seconds to allow for first-time compilation/dependency download
-			const portReady = await this.waitForPort(port, 90000);
+			// Use 40 seconds - project should already be compiled
+			const portReady = await this.waitForPort(port, 40000);
 			if (!portReady) {
 				this.cleanupTestProcess();
 				return this.errorResult(
-					`Debug port ${port} not ready after 90 seconds.\n\n` +
+					`Debug port ${port} not ready after 40 seconds.\n\n` +
 					`The test may have failed to start or crashed.\n` +
 					`Common causes:\n` +
 					`- Test class not found (check fully qualified name)\n` +
@@ -254,22 +254,26 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 			const debugAgent = `-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=${port}`;
 
 			if (buildSystem === 'maven') {
-				// Maven Surefire - use surefire:test goal to skip compile lifecycle
-				// Main agent should have already compiled the project
+				// Maven test with debug - use test goal with compile skip flags
+				// surefire:test doesn't work for all projects (plugin config issues)
 				cmd = 'mvn';
 				args = [
-					'surefire:test',  // Direct goal bypasses compile phases
+					'test',
 					`-Dtest=${test}`,
 					`-Dmaven.surefire.debug=${debugAgent}`,
+					'-DskipCompile=true',       // Skip main compile
+					'-Dmaven.main.skip=true',   // Another way to skip main compile
 					'-q' // quiet mode to reduce output noise
 				];
 			} else if (buildSystem === 'gradle') {
 				// Gradle test with debug - use testOnly to skip compilation
 				const gradleCmd = fs.existsSync(path.join(cwd, 'gradlew')) ? './gradlew' : 'gradle';
+				// Convert JUnit format (Class#method) to Gradle format (Class.method)
+				const gradleTestFilter = test.replace('#', '.');
 				cmd = gradleCmd;
 				args = [
 					'test',
-					`--tests=${test}`,
+					`--tests=${gradleTestFilter}`,
 					`--debug-jvm`, // Gradle's built-in debug flag
 					'-x', 'compileJava', // Skip compile
 					'-x', 'compileTestJava'

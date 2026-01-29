@@ -227,14 +227,26 @@ export function getJdbSession(sessionId: string): IJdbSession | undefined {
 
 /**
  * Get the active JDB session (most recent)
+ * Also checks if the process is still alive and cleans up dead sessions
  */
 export function getActiveJdbSession(): IJdbSession | undefined {
 	let latest: IJdbSession | undefined;
-	for (const session of sessions.values()) {
+	const deadSessions: string[] = [];
+	
+	for (const [sessionId, session] of sessions.entries()) {
 		if (session.status !== 'terminated') {
-			latest = session;
+			// Check if process is actually still alive
+			if (session.process.killed || session.process.exitCode !== null) {
+				// Process died but status wasn't updated
+				session.status = 'terminated';
+				deadSessions.push(sessionId);
+				console.log(`[JdbSession] Cleaning up dead session ${sessionId}`);
+			} else {
+				latest = session;
+			}
 		}
 	}
+	
 	return latest;
 }
 

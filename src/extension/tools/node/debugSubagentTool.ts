@@ -89,7 +89,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		]);
 
 		const loop = this.instantiationService.createInstance(SubagentToolCallingLoop, {
-			toolCallLimit: 35, // Allow more iterations for debugging workflows
+			toolCallLimit: 25, // Limit iterations to avoid token exhaustion
 			conversation: new Conversation('', [new Turn('', { type: 'user', message: debugInstruction })]),
 			request: this._inputContext!.request!,
 			location: this._inputContext!.request!.location,
@@ -138,13 +138,46 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		if (loopResult.response.type === ChatFetchResponseType.Success) {
 			subagentResponse = loopResult.toolCallRounds.at(-1)?.response ?? loopResult.round.response ?? '';
 		} else {
-			// Provide more context on failure - the reason may be a localization key if l10n isn't loaded
-			const reason = loopResult.response.reason;
+			// Provide detailed error information for debugging
+			const response = loopResult.response;
+			const reason = response.reason;
+			const reasonDetail = 'reasonDetail' in response ? response.reasonDetail : undefined;
+			const requestId = response.requestId;
+			const serverRequestId = response.serverRequestId;
+			
+			// Check for localization key issues
 			const isL10nKey = reason === 'stackTrace.format' || reason?.startsWith('error.');
+			
+			// Build detailed error message
+			let errorDetails = `Type: ${response.type}`;
+			if (reason && !isL10nKey) {
+				errorDetails += `\nReason: ${reason}`;
+			}
+			if (reasonDetail) {
+				errorDetails += `\nDetails: ${reasonDetail}`;
+			}
+			if (requestId) {
+				errorDetails += `\nRequest ID: ${requestId}`;
+			}
+			if (serverRequestId) {
+				errorDetails += `\nServer Request ID: ${serverRequestId}`;
+			}
+			
+			// Include specific info for certain error types
+			if (response.type === ChatFetchResponseType.RateLimited) {
+				const rateLimited = response as { retryAfter?: number; rateLimitKey?: string };
+				if (rateLimited.retryAfter) {
+					errorDetails += `\nRetry After: ${rateLimited.retryAfter}s`;
+				}
+				if (rateLimited.rateLimitKey) {
+					errorDetails += `\nRate Limit Key: ${rateLimited.rateLimitKey}`;
+				}
+			}
+			
 			if (isL10nKey) {
-				subagentResponse = `The debug subagent request failed. The error details were not properly captured (localization issue).\n\nPlease try again. If this persists, the LLM endpoint may be experiencing issues.`;
+				subagentResponse = `The debug subagent request failed. The error details were not properly captured (localization issue).\n\n${errorDetails}\n\nPlease try again. If this persists, the LLM endpoint may be experiencing issues.`;
 			} else {
-				subagentResponse = `The debug subagent request failed with this message:\n${loopResult.response.type}: ${reason}`;
+				subagentResponse = `The debug subagent request failed.\n\n${errorDetails}`;
 			}
 		}
 

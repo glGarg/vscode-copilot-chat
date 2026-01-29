@@ -49,7 +49,8 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 		@ITokenizerProvider private readonly _tokenizerProvider: ITokenizerProvider,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IRequestLogger private readonly _requestLogger: IRequestLogger,
-		@IEndpointProvider private readonly _endpointProvider: IEndpointProvider
+		@IEndpointProvider private readonly _endpointProvider: IEndpointProvider,
+		@ILogService private readonly _logService: ILogService
 	) {
 		// Initialize with the model's max tokens
 		this._maxTokens = languageModel.maxInputTokens;
@@ -255,6 +256,10 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 				pendingLoggedChatRequest?.resolve({ ...response, value: [response.value] }, streamRecorder.deltas);
 				return response;
 			} else {
+				// Log details about why the response was empty
+				this._logService.warn(`[ExtChatEndpoint] Empty response from model ${this.languageModel.id}. ` +
+					`text length: ${text.length}, toolsCalled: ${numToolsCalled}, ` +
+					`messages count: ${messages.length}, requestId: ${requestId}`);
 				const result: ChatResponse = {
 					type: ChatFetchResponseType.Unknown,
 					reason: 'No response from language model',
@@ -265,6 +270,8 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 				return result;
 			}
 		} catch (e) {
+			// Log the full error for debugging
+			this._logService.error(`[ExtChatEndpoint] Error from model ${this.languageModel.id}: ${toErrorMessage(e, true)}`, e);
 			const result: ChatResponse = {
 				type: ChatFetchResponseType.Failed,
 				reason: toErrorMessage(e, true),

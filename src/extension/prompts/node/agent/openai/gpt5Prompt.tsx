@@ -37,27 +37,21 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				### Recommended Workflow:<br />
 				<br />
-				**Step 1: Build the project first**<br />
-				```bash<br />
-				# Maven: mvn test-compile -q<br />
-				# Gradle: ./gradlew testClasses -q<br />
-				```<br />
-				<br />
-				**Step 2: Understand the bug** (before making changes)<br />
+				**Step 1: Understand the bug** (before making changes)<br />
 				```<br />
 				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", test: "com.example.MyTest#testMethod"{'}'})<br />
 				```<br />
 				Be specific - include the actual test name rather than saying "the failing test".<br />
 				<br />
-				**Step 3: Investigate root cause**<br />
+				**Step 2: Investigate root cause**<br />
 				```<br />
 				debug_subagent({'{'}question: "What is the value of [variable] at [location]?"{'}'})<br />
 				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
 				```<br />
 				<br />
-				**Step 4: Apply your fix**<br />
+				**Step 3: Apply your fix**<br />
 				<br />
-				**Step 5: Verify the fix works**<br />
+				**Step 4: Verify the fix works**<br />
 				```<br />
 				debug_subagent({'{'}question: "Does the test pass now after my fix?"{'}'})<br />
 				```<br />
@@ -66,18 +60,18 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				```<br />
 				// Using debug_subagent throughout:<br />
-				1. Build: mvn test-compile<br />
-				2. debug_subagent: "What exception in DubboEnumSetTest?"<br />
+				1. debug_subagent: "What exception in DubboEnumSetTest?"<br />
 				   → "ClassCastException at line 335"<br />
-				3. debug_subagent: "What is listType at line 335?"<br />
+				2. debug_subagent: "What is listType at line 335?"<br />
 				   → "listType=RegularEnumSet but this.listType=ArrayList"<br />
-				4. Apply fix to preserve listType<br />
-				5. debug_subagent: "Does DubboEnumSetTest pass now?"<br />
+				3. Apply fix to preserve listType<br />
+				4. debug_subagent: "Does DubboEnumSetTest pass now?"<br />
 				   → "Yes, test passes"<br />
-				6. Done!<br />
+				5. Done!<br />
 				```<br />
 				<br />
 				### Tips:<br />
+				- debug_subagent handles compilation automatically (incremental builds are fast)<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
 				- Use it to verify fixes rather than assuming they work<br />
 				- If a fix doesn't work, use debug_subagent to understand why<br />

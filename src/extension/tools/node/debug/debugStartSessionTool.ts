@@ -95,31 +95,37 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				);
 			}
 
-			// Step 2: Start test with debug agent (suspend=y so JVM waits for us)
-			// NOTE: Project must already be compiled by main agent
-			const testProcess = await this.startTestWithDebug(buildSystem, test, port, cwd);
-			if (!testProcess.process) {
-				return this.errorResult(`Failed to start test: ${testProcess.error}`);
-			}
-			activeTestProcess = testProcess.process;
-
-			// Step 3: Wait for debug port to be ready (poll, not fixed sleep!)
-			// Use 40 seconds - project should already be compiled
-			const portReady = await this.waitForPort(port, 40000);
-			if (!portReady) {
-				this.cleanupTestProcess();
+			// Step 2: Start test with debug agent and wait for port
+			// This handles compilation, port checking, and full output capture in one step
+			// Allow 120 seconds for compilation + test startup (large projects can take 2+ minutes)
+			const buildTimeoutMs = 120000;
+			const testResult = await this.startTestWithDebugAndWaitForPort(buildSystem, test, port, cwd, buildTimeoutMs);
+			
+			if (!testResult.portReady) {
+				if (testResult.process) {
+					activeTestProcess = testResult.process;
+					this.cleanupTestProcess();
+				}
 				return this.errorResult(
-					`Debug port ${port} not ready after 40 seconds.\n\n` +
-					`The test may have failed to start or crashed.\n` +
+					`Debug port ${port} not ready after ${buildTimeoutMs / 1000} seconds.\n\n` +
+					`${testResult.error || 'The test may have failed to start or crashed.'}\n\n` +
 					`Common causes:\n` +
 					`- Test class not found (check fully qualified name)\n` +
-					`- Compilation errors (run 'mvn compile test-compile' first)\n` +
+					`- Compilation errors in source code\n` +
 					`- Port already in use\n\n` +
-					`Test output:\n${testProcess.output}`
+					`Build/test output:\n${testResult.output || '(no output captured)'}`
 				);
 			}
+			
+			if (!testResult.process) {
+				return this.errorResult(`Failed to start test: ${testResult.error}`);
+			}
+			activeTestProcess = testResult.process;
+			
+			// Create testProcess object for waitForBreakpointOrCompletion
+			const testProcess = { process: testResult.process, output: testResult.output };
 
-			// Step 4: Attach JDB
+			// Step 3: Attach JDB
 			const sessionId = `jdb-${Date.now()}`;
 			const attachResult = await attachJdbSession(sessionId, port, 'localhost', cwd);
 			if (!attachResult.success) {
@@ -127,7 +133,7 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				return this.errorResult(`Failed to attach JDB: ${attachResult.error}\n\nOutput: ${attachResult.output}`);
 			}
 
-			// Step 5: TWO-STAGE BREAKPOINT APPROACH
+			// Step 4: TWO-STAGE BREAKPOINT APPROACH
 			// Stage 1: Set breakpoint on test method itself (GUARANTEED to hit)
 			// This ensures we pause inside the test before target classes might finish executing
 			const breakpointResults: string[] = [];
@@ -240,12 +246,19 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 		return { testClass: cleanTest, testMethod: null };
 	}
 
-	private async startTestWithDebug(
+	/**
+	 * Starts the test process with debug agent and waits for either:
+	 * 1. Debug port to open (success - ready to attach)
+	 * 2. Process to exit (failure - return full output for diagnostics)
+	 * 3. Timeout (failure - return captured output so far)
+	 */
+	private async startTestWithDebugAndWaitForPort(
 		buildSystem: BuildSystem, 
 		test: string, 
 		port: number,
-		cwd: string
-	): Promise<{ process: ChildProcess | null; output: string; error?: string }> {
+		cwd: string,
+		timeoutMs: number
+	): Promise<{ process: ChildProcess | null; output: string; portReady: boolean; error?: string }> {
 		return new Promise((resolve) => {
 			let cmd: string;
 			let args: string[];
@@ -254,19 +267,21 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 			const debugAgent = `-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=${port}`;
 
 			if (buildSystem === 'maven') {
-				// Maven test with debug - use test goal with compile skip flags
-				// surefire:test doesn't work for all projects (plugin config issues)
+				// Maven test with debug - allow incremental compilation
+				// Maven/Surefire will skip compilation if classes are up-to-date
+				// Skip coverage tools (JaCoCo, Cobertura) as they can conflict with debug instrumentation
 				cmd = 'mvn';
 				args = [
 					'test',
 					`-Dtest=${test}`,
 					`-Dmaven.surefire.debug=${debugAgent}`,
-					'-DskipCompile=true',       // Skip main compile
-					'-Dmaven.main.skip=true',   // Another way to skip main compile
+					'-Djacoco.skip=true',      // Skip JaCoCo coverage (often causes instrumentation conflicts)
+					'-Dcobertura.skip=true',   // Skip Cobertura coverage
 					'-q' // quiet mode to reduce output noise
 				];
 			} else if (buildSystem === 'gradle') {
-				// Gradle test with debug - use testOnly to skip compilation
+				// Gradle test with debug - allow incremental compilation
+				// Gradle will skip compilation if classes are up-to-date (very fast)
 				const gradleCmd = fs.existsSync(path.join(cwd, 'gradlew')) ? './gradlew' : 'gradle';
 				// Convert JUnit format (Class#method) to Gradle format (Class.method)
 				const gradleTestFilter = test.replace('#', '.');
@@ -275,17 +290,21 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 					'test',
 					`--tests=${gradleTestFilter}`,
 					`--debug-jvm`, // Gradle's built-in debug flag
-					'-x', 'compileJava', // Skip compile
-					'-x', 'compileTestJava'
+					'-x', 'jacocoTestReport',      // Skip JaCoCo report generation
+					'-x', 'jacocoTestCoverageVerification' // Skip JaCoCo verification
 				];
 			} else {
-				resolve({ process: null, output: '', error: 'Unknown build system' });
+				resolve({ process: null, output: '', portReady: false, error: 'Unknown build system' });
 				return;
 			}
 
 			console.log(`[DebugStartSessionTool] Starting: ${cmd} ${args.join(' ')}`);
 
 			let output = '';
+			let resolved = false;
+			let processExited = false;
+			let exitCode: number | null = null;
+
 			const proc = spawn(cmd, args, { 
 				cwd, 
 				shell: true,
@@ -305,31 +324,61 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 			});
 
 			proc.on('error', (err) => {
-				resolve({ process: null, output, error: err.message });
+				if (!resolved) {
+					resolved = true;
+					resolve({ process: null, output, portReady: false, error: err.message });
+				}
 			});
 
-			// Give it a moment to start, then resolve with the process
-			// The JVM will suspend immediately due to suspend=y
-			setTimeout(() => {
-				resolve({ process: proc, output });
-			}, 2000);
-		});
-	}
+			proc.on('exit', (code) => {
+				processExited = true;
+				exitCode = code;
+				console.log(`[DebugStartSessionTool] Process exited with code ${code}`);
+				// Don't resolve here - let the port polling handle it
+				// This ensures we capture any remaining output
+			});
 
-	private async waitForPort(port: number, timeoutMs: number): Promise<boolean> {
-		const startTime = Date.now();
-		
-		while (Date.now() - startTime < timeoutMs) {
-			const isOpen = await this.checkPort(port);
-			if (isOpen) {
-				console.log(`[DebugStartSessionTool] Port ${port} is ready`);
-				return true;
-			}
-			await this.sleep(500);
-		}
-		
-		console.log(`[DebugStartSessionTool] Port ${port} not ready after ${timeoutMs}ms`);
-		return false;
+			// Poll for port OR process exit
+			const startTime = Date.now();
+			const pollInterval = setInterval(async () => {
+				if (resolved) {
+					clearInterval(pollInterval);
+					return;
+				}
+
+				// Check if process exited (build failed, test not found, etc.)
+				if (processExited) {
+					clearInterval(pollInterval);
+					resolved = true;
+					// Give a moment to capture final output
+					await this.sleep(500);
+					const errorMsg = exitCode !== 0 
+						? `Build/test process exited with code ${exitCode}` 
+						: 'Build/test process exited unexpectedly';
+					resolve({ process: null, output, portReady: false, error: errorMsg });
+					return;
+				}
+
+				// Check if port is ready
+				const isOpen = await this.checkPort(port);
+				if (isOpen) {
+					clearInterval(pollInterval);
+					resolved = true;
+					console.log(`[DebugStartSessionTool] Port ${port} is ready`);
+					resolve({ process: proc, output, portReady: true });
+					return;
+				}
+
+				// Check timeout
+				if (Date.now() - startTime > timeoutMs) {
+					clearInterval(pollInterval);
+					resolved = true;
+					console.log(`[DebugStartSessionTool] Timeout after ${timeoutMs}ms`);
+					resolve({ process: proc, output, portReady: false, error: 'Timeout waiting for debug port' });
+					return;
+				}
+			}, 500);
+		});
 	}
 
 	private checkPort(port: number): Promise<boolean> {
@@ -451,14 +500,33 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				break;
 
 			case 'exception_caught':
-				message = 
-					`⚠️ EXCEPTION CAUGHT!\n\n` +
-					`Type: ${result.exceptionType}\n` +
-					`${result.exceptionMessage}\n\n` +
-					`Session is paused at exception. You can:\n` +
-					`• debug_inspect({action: "locals"}) - view variables at exception point\n` +
-					`• debug_inspect({action: "stack"}) - view call stack\n` +
-					`• debug_inspect({action: "this"}) - view current object`;
+				// Check if this is a setup/reflection exception vs a real test exception
+				const isSetupException = result.exceptionType?.includes('NoSuchMethodException') || 
+					result.exceptionType?.includes('ClassNotFoundException') ||
+					result.exceptionMessage?.includes('ReflectionUtils') ||
+					result.exceptionMessage?.includes('surefire');
+				
+				if (isSetupException) {
+					message = 
+						`⚠️ TEST SETUP EXCEPTION!\n\n` +
+						`Type: ${result.exceptionType}\n` +
+						`${result.exceptionMessage}\n\n` +
+						`This exception occurred during test discovery/setup, not during test execution.\n` +
+						`Common causes:\n` +
+						`• Test method name is incorrect or doesn't exist\n` +
+						`• Test class wasn't compiled\n` +
+						`• Method signature changed\n\n` +
+						`The debug session may have ended. You may need to verify the test name and try again.`;
+				} else {
+					message = 
+						`⚠️ EXCEPTION CAUGHT!\n\n` +
+						`Type: ${result.exceptionType}\n` +
+						`${result.exceptionMessage}\n\n` +
+						`Session is paused at exception. You can:\n` +
+						`• debug_inspect({action: "locals"}) - view variables at exception point\n` +
+						`• debug_inspect({action: "stack"}) - view call stack\n` +
+						`• debug_inspect({action: "this"}) - view current object`;
+				}
 				break;
 
 			case 'test_completed':

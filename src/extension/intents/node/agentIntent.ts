@@ -238,7 +238,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		
 		// Only provide essential tools for bug fixing - smaller set makes debug_subagent more prominent
 		const allowedTools = new Set([
-			// The debug subagent - MUST be used
+			// The debug subagent - MUST be run
 			ToolName.DebugSubagent,
 			// Context gathering
 			ToolName.ReadFile,

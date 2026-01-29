@@ -120,7 +120,7 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 		// This should match a model configured in github.copilot.chat.customOAIModels setting
 		const modelSelector = {
 			vendor: 'customoai',
-			id: 'qwen3-coder-30b-a3b-instruct'
+			id: 'accounts/msft/deployments/r1bjhiof'
 		};
 		
 		this._logService.info('[SubagentToolCallingLoop] Attempting to select model:', JSON.stringify(modelSelector, null, 2));

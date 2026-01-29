@@ -118,6 +118,10 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		const loopResult = await this.requestLogger.captureInvocation(debugSubagentToken, () => loop.run(stream, token));
 
 		console.log('[DebugSubagentTool] Loop completed. Response type:', loopResult.response.type);
+		if (loopResult.response.type !== ChatFetchResponseType.Success) {
+			console.log('[DebugSubagentTool] Loop failed with reason:', loopResult.response.reason);
+			console.log('[DebugSubagentTool] Full response:', JSON.stringify(loopResult.response));
+		}
 
 		// Build subagent trajectory metadata
 		const toolMetadata = {
@@ -134,7 +138,14 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		if (loopResult.response.type === ChatFetchResponseType.Success) {
 			subagentResponse = loopResult.toolCallRounds.at(-1)?.response ?? loopResult.round.response ?? '';
 		} else {
-			subagentResponse = `The debug subagent request failed with this message:\n${loopResult.response.type}: ${loopResult.response.reason}`;
+			// Provide more context on failure - the reason may be a localization key if l10n isn't loaded
+			const reason = loopResult.response.reason;
+			const isL10nKey = reason === 'stackTrace.format' || reason?.startsWith('error.');
+			if (isL10nKey) {
+				subagentResponse = `The debug subagent request failed. The error details were not properly captured (localization issue).\n\nPlease try again. If this persists, the LLM endpoint may be experiencing issues.`;
+			} else {
+				subagentResponse = `The debug subagent request failed with this message:\n${loopResult.response.type}: ${reason}`;
+			}
 		}
 
 		console.log('[DebugSubagentTool] Subagent response length:', subagentResponse.length);

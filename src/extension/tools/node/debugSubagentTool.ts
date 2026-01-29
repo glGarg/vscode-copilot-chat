@@ -136,7 +136,39 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 
 		let subagentResponse = '';
 		if (loopResult.response.type === ChatFetchResponseType.Success) {
-			subagentResponse = loopResult.toolCallRounds.at(-1)?.response ?? loopResult.round.response ?? '';
+			// First, search ALL rounds for a <debug_answer> block (the subagent may have provided one earlier)
+			let debugAnswer = '';
+			for (const round of loopResult.toolCallRounds) {
+				const response = round.response ?? '';
+				const answerMatch = response.match(/<debug_answer>([\s\S]*?)<\/debug_answer>/);
+				if (answerMatch) {
+					debugAnswer = answerMatch[1].trim();
+					// Keep looking - we want the LAST debug_answer if there are multiple
+				}
+			}
+			// Also check the final round response
+			const finalResponse = loopResult.round?.response ?? '';
+			const finalAnswerMatch = finalResponse.match(/<debug_answer>([\s\S]*?)<\/debug_answer>/);
+			if (finalAnswerMatch) {
+				debugAnswer = finalAnswerMatch[1].trim();
+			}
+			
+			if (debugAnswer) {
+				// Found a proper debug answer
+				subagentResponse = debugAnswer;
+			} else {
+				// No <debug_answer> found - the subagent hit the tool limit without providing an answer
+				const lastResponse = loopResult.toolCallRounds.at(-1)?.response ?? loopResult.round.response ?? '';
+				
+				// Check if the model was confused and tried to use wrong tool calling format
+				const hasMalformedToolCall = lastResponse.includes('<function=') || lastResponse.includes('<parameter=');
+				
+				if (hasMalformedToolCall) {
+					subagentResponse = `[Debug subagent encountered a tool calling format error]\n\nThe subagent attempted to call tools using an incorrect format (<function=...>) instead of using the native tool calling mechanism. This is a model behavior issue.\n\nPlease try debugging manually or analyze the code directly.`;
+				} else {
+					subagentResponse = `[Debug subagent reached tool limit without providing a structured answer]\n\nLast response from subagent:\n${lastResponse}\n\nNote: The subagent may have gathered useful information but did not provide a final conclusion. You may need to analyze the code directly or try debugging again with a more specific question.`;
+				}
+			}
 		} else {
 			// Provide detailed error information for debugging
 			const response = loopResult.response;

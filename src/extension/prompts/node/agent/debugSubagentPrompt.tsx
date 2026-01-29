@@ -8,7 +8,8 @@ import { GenericBasePromptElementProps } from '../../../context/node/resolvers/g
 import { CopilotToolMode } from '../../../tools/common/toolsRegistry';
 import { ChatToolCalls } from '../panel/toolCalling';
 
-const MAX_DEBUG_TURNS = 35;
+// Must match toolCallLimit in debugSubagentTool.ts
+const MAX_DEBUG_TURNS = 25;
 
 /**
  * Prompt for the debug subagent that answers specific questions about runtime behavior.
@@ -124,7 +125,18 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					- Be factual and precise - report what you actually observed<br />
 					- If you cannot answer the question (build fails, test not found, etc.), say so clearly<br />
 					- Keep your answer focused on the specific question asked<br />
-					- Include the actual values you observed as evidence
+					- Include the actual values you observed as evidence<br />
+					<br />
+					## CRITICAL - Tool Calling Format<br />
+					<br />
+					You MUST use the native tool calling mechanism to invoke tools. Do NOT write tool calls in your text response.<br />
+					<br />
+					❌ WRONG - Do not write this in your response:<br />
+					&lt;function=debug_start_session&gt;&lt;parameter=test&gt;...&lt;/parameter&gt;&lt;/function&gt;<br />
+					<br />
+					✅ CORRECT - Use the actual tool calling mechanism (tools will be invoked automatically based on your function calls).<br />
+					<br />
+					If you find yourself typing &lt;function= or &lt;parameter=, STOP - you are using the wrong format.
 				</SystemMessage>
 				<UserMessage priority={900}>{debugQuestion}</UserMessage>
 				<ChatToolCalls

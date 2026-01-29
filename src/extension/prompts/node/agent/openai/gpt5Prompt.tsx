@@ -31,63 +31,41 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 			</Tag>
 			{tools[ToolName.DebugSubagent] && <>
 			<Tag name='debug_subagent_instructions'>
-				## 🔴 CRITICAL: debug_subagent is MANDATORY for Bug Fixing 🔴<br />
+				## Using debug_subagent for Bug Fixing<br />
 				<br />
-				### STOP! READ THIS FIRST!<br />
+				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
 				<br />
-				You have access to `debug_subagent` - a runtime debugging oracle that can inspect actual variable values, trace execution, and verify fixes. **YOU MUST USE IT** for all bug-fixing tasks. This is not optional.<br />
+				### Recommended Workflow:<br />
 				<br />
-				### 🚫 FORBIDDEN ACTIONS (Will cause task failure):<br />
-				<br />
-				1. **DO NOT** make ANY code changes before calling debug_subagent at least once<br />
-				2. **DO NOT** run tests yourself to see failures - ask debug_subagent instead<br />
-				3. **DO NOT** guess what's wrong by reading code - use debug_subagent to see actual runtime values<br />
-				4. **DO NOT** skip verification - after ANY code change, call debug_subagent to verify<br />
-				5. **DO NOT** assume your fix works - always verify with debug_subagent<br />
-				<br />
-				### ✅ REQUIRED WORKFLOW (Follow this exactly):<br />
-				<br />
-				**STEP 1: Build First** (before any debugging)<br />
+				**Step 1: Build the project first**<br />
 				```bash<br />
-				# Maven projects:<br />
-				mvn test-compile -q<br />
-				# Gradle projects:<br />
-				./gradlew testClasses -q<br />
+				# Maven: mvn test-compile -q<br />
+				# Gradle: ./gradlew testClasses -q<br />
 				```<br />
 				<br />
-				**STEP 2: Understand the Bug** (MANDATORY - do this BEFORE any code changes)<br />
+				**Step 2: Understand the bug** (before making changes)<br />
 				```<br />
-				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod and what code path leads to it?", test: "com.example.MyTest#testMethod"{'}'})<br />
-				debug_subagent({'{'}question: "What are the actual values of [variables] at [location]?"{'}'})<br />
+				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", test: "com.example.MyTest#testMethod"{'}'})<br />
 				```<br />
-				**IMPORTANT**: Always include the SPECIFIC test name in your question - don't say "the failing test".<br />
+				Be specific - include the actual test name rather than saying "the failing test".<br />
 				<br />
-				**STEP 3: Understand Root Cause** (MANDATORY - do this BEFORE writing fix)<br />
+				**Step 3: Investigate root cause**<br />
 				```<br />
+				debug_subagent({'{'}question: "What is the value of [variable] at [location]?"{'}'})<br />
 				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
-				debug_subagent({'{'}question: "What is the call stack when [event] happens?"{'}'})<br />
 				```<br />
 				<br />
-				**STEP 4: Make Your Fix** (only after Steps 2-3)<br />
-				- Apply your code changes using apply_patch<br />
+				**Step 4: Apply your fix**<br />
 				<br />
-				**STEP 5: Verify Fix** (MANDATORY - do this AFTER every code change)<br />
+				**Step 5: Verify the fix works**<br />
 				```<br />
-				debug_subagent({'{'}question: "After my fix, does the test pass now?"{'}'})<br />
-				debug_subagent({'{'}question: "After my fix, what is [variable] at [location]?"{'}'})<br />
+				debug_subagent({'{'}question: "Does the test pass now after my fix?"{'}'})<br />
 				```<br />
-				<br />
-				**STEP 6: Iterate if Needed**<br />
-				- If verification fails, go back to Step 2 with new questions<br />
-				- Keep using debug_subagent until the fix is verified working<br />
 				<br />
 				### Example Session:<br />
 				<br />
 				```<br />
-				// WRONG - Making changes without debugging first:<br />
-				1. Read code → 2. Guess fix → 3. Apply patch → FAIL<br />
-				<br />
-				// CORRECT - Using debug_subagent throughout:<br />
+				// Using debug_subagent throughout:<br />
 				1. Build: mvn test-compile<br />
 				2. debug_subagent: "What exception in DubboEnumSetTest?"<br />
 				   → "ClassCastException at line 335"<br />
@@ -99,12 +77,10 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				6. Done!<br />
 				```<br />
 				<br />
-				### Remember:<br />
-				<br />
-				- debug_subagent sees ACTUAL runtime values - your code reading is just guessing<br />
-				- Call debug_subagent MINIMUM 3 times per bug: understand → fix → verify<br />
-				- If tests still fail after your fix, call debug_subagent again to understand why<br />
-				- The debug_subagent handles all JDB complexity - just ask natural questions<br />
+				### Tips:<br />
+				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
+				- Use it to verify fixes rather than assuming they work<br />
+				- If a fix doesn't work, use debug_subagent to understand why<br />
 			</Tag>
 			</>}
 			<Tag name='personality'>

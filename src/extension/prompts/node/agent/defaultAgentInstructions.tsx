@@ -116,37 +116,56 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				The user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
 				{tools[ToolName.DebugSubagent] && <>
-				## Debug Subagent - Runtime Oracle for Java Debugging<br />
+				## Using debug_subagent for Bug Fixing<br />
 				<br />
-				### ⚠️ MANDATORY REQUIREMENT ⚠️<br />
+				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
 				<br />
-				For ALL Java bug-fixing tasks, you MUST use `{ToolName.DebugSubagent}` in ALL THREE phases. This is NON-NEGOTIABLE. Offload ALL debugging to the debug_subagent.<br />
+				### Recommended Workflow:<br />
 				<br />
-				**PREREQUISITE**: Before calling debug_subagent, ensure the project compiles: `mvn test-compile` (Maven) or `./gradlew testClasses` (Gradle).<br />
-				<br />
-				**PHASE 1 - Bug Reproduction (MANDATORY)**: BEFORE reading code, call debug_subagent:<br />
-				- "What exception is thrown in test X?"<br />
-				- "What is the value of `variable` when the test fails?"<br />
-				<br />
-				**PHASE 2 - Fix Generation (MANDATORY)**: BEFORE writing code changes, call debug_subagent:<br />
-				- "Why does `condition` evaluate to true/false at line N?"<br />
-				- "What is `this.field` vs `parameter` at the branch point?"<br />
-				<br />
-				**PHASE 3 - Fix Verification (MANDATORY)**: AFTER making changes, call debug_subagent:<br />
-				- "After my fix, does the test now pass?"<br />
-				- "Does my fix cause the correct code path to execute?"<br />
-				<br />
-				**How to Call**:<br />
-				```<br />
-				debug_subagent({'{'}<br />
-				{'  '}question: "What is the value of `listType` at line 330?",  // REQUIRED<br />
-				{'  '}file: "ObjectReaderImplList.java",                         // optional<br />
-				{'  '}test: "com.example.MyTest#testMethod"                      // optional<br />
-				{'}'})<br />
+				**Step 1: Build the project first**<br />
+				```bash<br />
+				# Maven: mvn test-compile -q<br />
+				# Gradle: ./gradlew testClasses -q<br />
 				```<br />
 				<br />
-				**⛔ VIOLATIONS**: Running tests yourself, making changes without debug_subagent, skipping verification.<br />
-				**✅ CORRECT**: Call debug_subagent FIRST, understand with debug_subagent, verify with debug_subagent.<br />
+				**Step 2: Understand the bug** (before making changes)<br />
+				```<br />
+				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", test: "com.example.MyTest#testMethod"{'}'})<br />
+				```<br />
+				Be specific - include the actual test name rather than saying "the failing test".<br />
+				<br />
+				**Step 3: Investigate root cause**<br />
+				```<br />
+				debug_subagent({'{'}question: "What is the value of [variable] at [location]?"{'}'})<br />
+				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
+				```<br />
+				<br />
+				**Step 4: Apply your fix**<br />
+				<br />
+				**Step 5: Verify the fix works**<br />
+				```<br />
+				debug_subagent({'{'}question: "Does the test pass now after my fix?"{'}'})<br />
+				```<br />
+				<br />
+				### Example Session:<br />
+				<br />
+				```<br />
+				// Using debug_subagent throughout:<br />
+				1. Build: mvn test-compile<br />
+				2. debug_subagent: "What exception in DubboEnumSetTest?"<br />
+				   → "ClassCastException at line 335"<br />
+				3. debug_subagent: "What is listType at line 335?"<br />
+				   → "listType=RegularEnumSet but this.listType=ArrayList"<br />
+				4. Apply fix to preserve listType<br />
+				5. debug_subagent: "Does DubboEnumSetTest pass now?"<br />
+				   → "Yes, test passes"<br />
+				6. Done!<br />
+				```<br />
+				<br />
+				### Tips:<br />
+				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
+				- Use it to verify fixes rather than assuming they work<br />
+				- If a fix doesn't work, use debug_subagent to understand why<br />
 				</>}
 				You will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.{tools[ToolName.ReadFile] && <> Some attachments may be summarized with omitted sections like `/* Lines 123-456 omitted */`. You can use the {ToolName.ReadFile} tool to read more context if needed. Never pass this omitted line marker to an edit tool.</>}<br />
 				If you can infer the project type (languages, frameworks, and libraries) from the user's query or the context that you have, make sure to keep them in mind when making changes.<br />
@@ -166,7 +185,7 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				No need to ask permission before using a tool.<br />
 				NEVER say the name of a tool to a user. For example, instead of saying that you'll use the {ToolName.CoreRunInTerminal} tool, say "I'll run the command in a terminal".<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
-				{tools[ToolName.DebugSubagent] && <>**⚠️ MANDATORY**: For Java bugs, you MUST call {ToolName.DebugSubagent} in Phase 1 (reproduction), Phase 2 (before fix), AND Phase 3 (after fix). Do NOT run tests yourself - offload ALL debugging to debug_subagent!<br /></>}
+				{tools[ToolName.DebugSubagent] && <>For Java bug fixing, use {ToolName.DebugSubagent} to understand the bug, investigate root causes, and verify fixes.<br /></>}
 				If you think running multiple tools can answer the user's question, prefer calling them in parallel whenever possible{tools[ToolName.Codebase] && <>, but do not call {ToolName.Codebase} in parallel.</>}<br />
 				{tools[ToolName.ReadFile] && <>When using the {ToolName.ReadFile} tool, prefer reading a large section over calling the {ToolName.ReadFile} tool many times in sequence. You can also think of all the pieces you may be interested in and read them in parallel. Read large enough context to ensure you get what you need.<br /></>}
 				{tools[ToolName.Codebase] && <>If {ToolName.Codebase} returns the full contents of the text files in the workspace, you have all the workspace context.<br /></>}

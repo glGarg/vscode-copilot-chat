@@ -147,46 +147,35 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 			</Tag>
 			{tools[ToolName.DebugSubagent] && <>
 			<Tag name='debug_subagent_instructions'>
-				## Debug Subagent - Runtime Oracle for Java Debugging<br />
+				## Using debug_subagent for Bug Fixing<br />
 				<br />
-				### ⚠️ MANDATORY REQUIREMENT ⚠️<br />
+				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
 				<br />
-				For ALL Java bug-fixing tasks, you MUST use `{ToolName.DebugSubagent}` in ALL THREE phases below. This is NON-NEGOTIABLE. You MUST offload ALL runtime debugging to the debug_subagent - do NOT attempt to debug by reading code alone.<br />
+				### Prerequisite: Build Before Debugging<br />
 				<br />
-				### PREREQUISITE: Build Before Debugging<br />
-				<br />
-				**BEFORE calling debug_subagent**, you MUST ensure the project compiles successfully:<br />
+				Before calling debug_subagent, ensure the project compiles:<br />
 				- Maven: `mvn test-compile` or `mvn compile`<br />
 				- Gradle: `./gradlew testClasses` or `./gradlew compileTestJava`<br />
 				<br />
-				The debug_subagent assumes the project is already built. Do NOT call it if compilation fails.<br />
+				### Recommended Workflow<br />
 				<br />
-				### PHASE 1: Bug Reproduction (MANDATORY)<br />
-				<br />
-				BEFORE reading any code or forming hypotheses, you MUST call debug_subagent to understand what's happening at runtime:<br />
+				**Step 1: Understand the bug** (before making changes)<br />
 				- "What exception is thrown and what is the stack trace in test X?"<br />
 				- "What is the value of `variable` when the test fails?"<br />
-				- "Does execution reach method Y during test X?"<br />
 				<br />
-				### PHASE 2: Fix Generation (MANDATORY)<br />
-				<br />
-				BEFORE writing ANY code changes, you MUST call debug_subagent to understand root cause:<br />
+				**Step 2: Investigate root cause**<br />
 				- "Why does `condition` evaluate to true/false at line N?"<br />
 				- "What is `this.field` vs `parameter` at the branch point?"<br />
-				- "Why does the code take path A instead of path B?"<br />
 				<br />
-				### PHASE 3: Fix Verification (MANDATORY)<br />
-				<br />
-				AFTER making code changes, you MUST call debug_subagent to verify the fix works:<br />
+				**Step 3: Verify the fix**<br />
 				- "After my change, does the test now pass?"<br />
 				- "After the fix, what is the value of `variable` at line N?"<br />
-				- "Does my fix cause the correct code path to execute?"<br />
 				<br />
 				### How to Call<br />
 				<br />
 				```<br />
 				debug_subagent({'{'}<br />
-				{'  '}question: "What is the value of `listType` at line 330?",  // REQUIRED<br />
+				{'  '}question: "What is the value of `listType` at line 330?",  // required<br />
 				{'  '}file: "ObjectReaderImplList.java",                         // optional<br />
 				{'  '}line: 330,                                                 // optional<br />
 				{'  '}test: "com.alibaba.fastjson2.DubboEnumSetTest#testEnumSet", // optional<br />
@@ -195,7 +184,7 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 				{'}'})<br />
 				```<br />
 				<br />
-				### Example Workflow<br />
+				### Example Session<br />
 				<br />
 				**Step 1 (Reproduction)**: debug_subagent({'{'}question: "What exception is thrown in EnumSetTest?"{'}'})<br />
 				→ "ClassCastException at line 335: RegularEnumSet cannot be cast to ArrayList"<br />
@@ -206,20 +195,11 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 				**Step 3 (After fix)**: debug_subagent({'{'}question: "After my fix, does EnumSetTest pass?"{'}'})<br />
 				→ "Yes, the test now passes. listType is correctly preserved."<br />
 				<br />
-				### ⛔ VIOLATIONS ⛔<br />
+				### Tips<br />
 				<br />
-				You are VIOLATING requirements if you:<br />
-				- Run the failing test yourself instead of asking debug_subagent<br />
-				- Make code changes without first calling debug_subagent to understand the bug<br />
-				- Skip verification with debug_subagent after making changes<br />
-				- Try to debug by only reading code without runtime inspection<br />
-				<br />
-				### ✅ CORRECT BEHAVIOR ✅<br />
-				<br />
-				- ALWAYS call debug_subagent FIRST when you encounter a failing test<br />
-				- ALWAYS call debug_subagent to understand WHY before writing fixes<br />
-				- ALWAYS call debug_subagent to VERIFY after making changes<br />
-				- Trust the debug_subagent's answers - it observes actual runtime values<br />
+				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
+				- Use it to verify fixes rather than assuming they work<br />
+				- If a fix doesn't work, use debug_subagent to understand why<br />
 			</Tag>
 			</>}
 			<Tag name='toolUseInstructions'>

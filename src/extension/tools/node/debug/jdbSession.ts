@@ -50,10 +50,24 @@ export async function attachJdbSession(
 	workingDir?: string
 ): Promise<{ success: boolean; output: string; error?: string }> {
 	
-	// Build JDB attach command
-	const args: string[] = ['-attach', `${host}:${port}`];
+	// Build source path for common Java project layouts (relative to workingDir)
+	// Maven/Gradle standard: src/main/java, src/test/java
+	// Also check for Kotlin sources and simple "src" layout
+	const sourcePaths = [
+		'src/main/java',
+		'src/test/java',
+		'src/main/kotlin',
+		'src/test/kotlin',
+		'src'  // fallback for simpler projects
+	].join(':');
+	
+	// Build JDB attach command with source path
+	const args: string[] = [
+		'-sourcepath', sourcePaths,
+		'-attach', `${host}:${port}`
+	];
 
-	console.log(`[JdbSession] Attaching JDB to ${host}:${port}`);
+	console.log(`[JdbSession] Attaching JDB to ${host}:${port} with sourcepath: ${sourcePaths}`);
 
 	return launchJdbProcess(sessionId, args, workingDir);
 }

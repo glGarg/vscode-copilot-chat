@@ -95,19 +95,43 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 				]);
 				
 				// Parse source listing - JDB shows ~10 lines around current position with => marker
+				// Format: "linenum    code" or "linenum =>  code" for current line
 				let source = '';
-				if (listResult.output && !listResult.output.includes('not available')) {
-					const lines = listResult.output.split('\n')
-						.filter(l => l.trim() && !l.includes('main[') && !l.includes('>'));
+				const listOutput = listResult.output || '';
+				if (listOutput && 
+				    !listOutput.includes('not available') && 
+				    !listOutput.includes('Source file not found') &&
+				    !listOutput.includes('not found')) {
+					const lines = listOutput.split('\n')
+						.filter(l => l.trim() && !l.includes('main['))
+						// Keep lines that look like source (start with line number)
+						// but filter out JDB prompt lines that end with just ">"
+						.filter(l => !l.match(/^\s*>\s*$/));
 					source = lines.join('\n');
 				}
 				
-				// Parse locals
+				// Parse locals - JDB outputs: source listing (if available), then "Local variables:" header, then vars
+				// We only want the variable lines after "Local variables:" or "Method arguments:"
 				let locals = '';
-				if (localsResult.output && !localsResult.output.includes('No local variables')) {
-					const lines = localsResult.output.split('\n')
-						.filter(l => l.trim() && !l.includes('main[') && !l.includes('>'));
-					locals = lines.join('\n');
+				const localsOutput = localsResult.output || '';
+				if (localsOutput && !localsOutput.includes('No local variables')) {
+					// Find where actual variable data starts
+					const localVarsIndex = localsOutput.indexOf('Local variables:');
+					const methodArgsIndex = localsOutput.indexOf('Method arguments:');
+					const startIndex = Math.min(
+						localVarsIndex >= 0 ? localVarsIndex : Infinity,
+						methodArgsIndex >= 0 ? methodArgsIndex : Infinity
+					);
+					
+					if (startIndex < Infinity) {
+						// Extract only from "Method arguments:" or "Local variables:" onwards
+						const varsSection = localsOutput.slice(startIndex);
+						const lines = varsSection.split('\n')
+							.filter(l => l.trim() && 
+							       !l.includes('main[') &&
+							       !l.match(/^\s*>\s*$/));
+						locals = lines.join('\n');
+					}
 				}
 				
 				return { source, locals };

@@ -87,17 +87,13 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 			const output = result.output || '';
 			let statusMessage: string;
 
-			// Helper to get source code and locals for context
-			const getSourceAndLocals = async (): Promise<{ source: string; locals: string }> => {
-				const [listResult, localsResult] = await Promise.all([
-					sendJdbCommand(session.sessionId, 'list', 2000),
-					sendJdbCommand(session.sessionId, 'locals', 2000)
-				]);
+			// Helper to get source code for context
+			const getSourceCode = async (): Promise<string> => {
+				const listResult = await sendJdbCommand(session.sessionId, 'list', 2000);
 				
 				// Parse source listing - JDB shows ~10 lines around current position with => marker
 				// Format: "linenum    code" or "linenum =>  code" for current line
 				// Note: JDB may append "Local variables:" section at the end - we need to strip that
-				let source = '';
 				const listOutput = listResult.output || '';
 				if (listOutput && 
 				    !listOutput.includes('not available') && 
@@ -120,34 +116,9 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 						// Keep lines that look like source (start with line number)
 						// but filter out JDB prompt lines that end with just ">"
 						.filter(l => !l.match(/^\s*>\s*$/));
-					source = lines.join('\n');
+					return lines.join('\n');
 				}
-				
-				// Parse locals - JDB outputs: source listing (if available), then "Local variables:" header, then vars
-				// We only want the variable lines after "Local variables:" or "Method arguments:"
-				let locals = '';
-				const localsOutput = localsResult.output || '';
-				if (localsOutput && !localsOutput.includes('No local variables')) {
-					// Find where actual variable data starts
-					const localVarsIndex = localsOutput.indexOf('Local variables:');
-					const methodArgsIndex = localsOutput.indexOf('Method arguments:');
-					const startIndex = Math.min(
-						localVarsIndex >= 0 ? localVarsIndex : Infinity,
-						methodArgsIndex >= 0 ? methodArgsIndex : Infinity
-					);
-					
-					if (startIndex < Infinity) {
-						// Extract only from "Method arguments:" or "Local variables:" onwards
-						const varsSection = localsOutput.slice(startIndex);
-						const lines = varsSection.split('\n')
-							.filter(l => l.trim() && 
-							       !l.includes('main[') &&
-							       !l.match(/^\s*>\s*$/));
-						locals = lines.join('\n');
-					}
-				}
-				
-				return { source, locals };
+				return '';
 			};
 
 			if (action === 'continue' || action === 'run') {
@@ -155,8 +126,8 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 					// Extract breakpoint location
 					const match = output.match(/Breakpoint hit:.*?"thread=([^"]+)".*?(\S+)\(\),\s*line=(\d+)/);
 					
-					// Auto-fetch source and locals
-					const { source, locals } = await getSourceAndLocals();
+					// Auto-fetch source code
+					const source = await getSourceCode();
 					
 					if (match) {
 						const [, thread, method, line] = match;
@@ -172,17 +143,11 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 						statusMessage += `\n📄 SOURCE CODE:\n${source}\n`;
 					}
 					
-					// Add locals
-					if (locals) {
-						statusMessage += `\n📋 LOCAL VARIABLES:\n${locals}\n`;
-					} else {
-						statusMessage += `\n📋 LOCAL VARIABLES: (none at this point)\n`;
-					}
-					
 					statusMessage += `\nNext steps:\n` +
 						`• debug_control({action: "step_over"}) - execute next line\n` +
 						`• debug_control({action: "step_into"}) - step into method call\n` +
 						`• debug_control({action: "continue"}) - run to next breakpoint\n` +
+						`• debug_inspect({action: "locals"}) - see local variables\n` +
 						`• debug_inspect({action: "eval", expression: "expr"}) - evaluate expression`;
 						
 				} else if (output.includes('The application exited')) {
@@ -204,8 +169,8 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 				// Extract current location after step
 				const match = output.match(/Step completed:.*?(\S+)\(\),\s*line=(\d+)/);
 				
-				// Auto-fetch source and locals after stepping
-				const { source, locals } = await getSourceAndLocals();
+				// Auto-fetch source code after stepping
+				const source = await getSourceCode();
 				
 				if (match) {
 					const [, method, line] = match;
@@ -219,12 +184,12 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 					statusMessage += `\n📄 SOURCE CODE:\n${source}\n`;
 				}
 				
-				// Add locals
-				if (locals) {
-					statusMessage += `\n📋 LOCAL VARIABLES:\n${locals}`;
-				} else {
-					statusMessage += `\n📋 LOCAL VARIABLES: (none at this point)`;
-				}
+				statusMessage += `\nNext steps:\n` +
+					`• debug_control({action: "step_over"}) - execute next line\n` +
+					`• debug_control({action: "step_into"}) - step into method call\n` +
+					`• debug_control({action: "continue"}) - run to next breakpoint\n` +
+					`• debug_inspect({action: "locals"}) - see local variables\n` +
+					`• debug_inspect({action: "eval", expression: "expr"}) - evaluate expression`;
 			} else {
 				statusMessage = `✅ ${action.toUpperCase()} completed\n\n${output.trim() || 'No output'}`;
 			}

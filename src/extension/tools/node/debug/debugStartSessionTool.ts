@@ -194,14 +194,10 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				result = await this.waitForBreakpointOrCompletion(sessionId, testProcess, timeout * 1000);
 			}
 
-			// If we hit a breakpoint or exception, auto-fetch source code and locals
+			// If we hit a breakpoint or exception, auto-fetch source code
 			let sourceCode = '';
-			let localVars = '';
 			if (result.status === 'breakpoint_hit' || result.status === 'exception_caught') {
-				const [listResult, localsResult] = await Promise.all([
-					sendJdbCommand(sessionId, 'list', 2000),
-					sendJdbCommand(sessionId, 'locals', 2000)
-				]);
+				const listResult = await sendJdbCommand(sessionId, 'list', 2000);
 				
 				// Parse source listing - JDB shows ~10 lines around current position with => marker
 				// Format: "linenum    code" or "linenum =>  code" for current line
@@ -230,33 +226,10 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 						.filter(l => !l.match(/^\s*>\s*$/));
 					sourceCode = lines.join('\n');
 				}
-				
-				// Parse locals - JDB outputs: source listing (if available), then "Local variables:" header, then vars
-				// We only want the variable lines after "Local variables:" or "Method arguments:"
-				const localsOutput = localsResult.output || '';
-				if (localsOutput && !localsOutput.includes('No local variables')) {
-					// Find where actual variable data starts
-					const localVarsIndex = localsOutput.indexOf('Local variables:');
-					const methodArgsIndex = localsOutput.indexOf('Method arguments:');
-					const startIndex = Math.min(
-						localVarsIndex >= 0 ? localVarsIndex : Infinity,
-						methodArgsIndex >= 0 ? methodArgsIndex : Infinity
-					);
-					
-					if (startIndex < Infinity) {
-						// Extract only from "Method arguments:" or "Local variables:" onwards
-						const varsSection = localsOutput.slice(startIndex);
-						const lines = varsSection.split('\n')
-							.filter(l => l.trim() && 
-							       !l.includes('main[') &&
-							       !l.match(/^\s*>\s*$/));
-						localVars = lines.join('\n');
-					}
-				}
 			}
 
 			// Format and return result
-			return this.formatResult(result, breakpointResults, buildSystem, sourceCode, localVars);
+			return this.formatResult(result, breakpointResults, buildSystem, sourceCode);
 
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
@@ -539,8 +512,7 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 		result: DebugSessionResult, 
 		breakpointResults: string[], 
 		buildSystem: string,
-		sourceCode: string = '',
-		localVars: string = ''
+		sourceCode: string = ''
 	): ExtendedLanguageModelToolResult {
 		let message: string;
 
@@ -556,17 +528,11 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 					message += `\n📄 SOURCE CODE:\n${sourceCode}\n`;
 				}
 				
-				// Add local variables if available
-				if (localVars) {
-					message += `\n📋 LOCAL VARIABLES:\n${localVars}\n`;
-				} else {
-					message += `\n📋 LOCAL VARIABLES: (none at this point)\n`;
-				}
-				
 				message += `\nNext steps:\n` +
 					`• debug_control({action: "step_over"}) - execute next line\n` +
 					`• debug_control({action: "step_into"}) - step into method call\n` +
 					`• debug_control({action: "continue"}) - run to next breakpoint\n` +
+					`• debug_inspect({action: "locals"}) - see local variables\n` +
 					`• debug_inspect({action: "eval", expression: "expr"}) - evaluate expression\n` +
 					`• debug_inspect({action: "stack"}) - view call stack`;
 				break;
@@ -600,12 +566,8 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 						message += `\n📄 SOURCE CODE:\n${sourceCode}\n`;
 					}
 					
-					// Add local variables if available
-					if (localVars) {
-						message += `\n📋 LOCAL VARIABLES:\n${localVars}\n`;
-					}
-					
 					message += `\nSession is paused at exception. You can:\n` +
+						`• debug_inspect({action: "locals"}) - see local variables\n` +
 						`• debug_inspect({action: "stack"}) - view call stack\n` +
 						`• debug_inspect({action: "eval", expression: "expr"}) - evaluate expression\n` +
 						`• debug_inspect({action: "this"}) - view current object`;

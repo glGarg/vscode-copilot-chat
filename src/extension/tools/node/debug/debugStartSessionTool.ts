@@ -205,12 +205,25 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				
 				// Parse source listing - JDB shows ~10 lines around current position with => marker
 				// Format: "linenum    code" or "linenum =>  code" for current line
+				// Note: JDB may append "Local variables:" section at the end - we need to strip that
 				const listOutput = listResult.output || '';
 				if (listOutput && 
 				    !listOutput.includes('not available') && 
 				    !listOutput.includes('Source file not found') &&
 				    !listOutput.includes('not found')) {
-					const lines = listOutput.split('\n')
+					// Truncate at "Local variables:" or "Method arguments:" if present
+					let sourceOnly = listOutput;
+					const localVarsIdx = listOutput.indexOf('Local variables:');
+					const methodArgsIdx = listOutput.indexOf('Method arguments:');
+					const cutoffIdx = Math.min(
+						localVarsIdx >= 0 ? localVarsIdx : Infinity,
+						methodArgsIdx >= 0 ? methodArgsIdx : Infinity
+					);
+					if (cutoffIdx < Infinity) {
+						sourceOnly = listOutput.slice(0, cutoffIdx);
+					}
+					
+					const lines = sourceOnly.split('\n')
 						.filter(l => l.trim() && !l.includes('main['))
 						// Keep lines that look like source (start with line number)
 						// but filter out JDB prompt lines that end with just ">"

@@ -15,7 +15,7 @@ import { ITelemetryService } from '../../../platform/telemetry/common/telemetry'
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatResponseProgressPart, ChatResponseReferencePart, LanguageModelTextPart, LanguageModelToolResult2 } from '../../../vscodeTypes';
 import { getAgentTools } from '../../intents/node/agentIntent';
-import { IToolCallingLoopOptions, ToolCallingLoop, ToolCallingLoopFetchOptions } from '../../intents/node/toolCallingLoop';
+import { IToolCallingLoopOptions, IToolCallLoopResult, ToolCallingLoop, ToolCallingLoopFetchOptions } from '../../intents/node/toolCallingLoop';
 import { AgentPrompt } from '../../prompts/node/agent/agentPrompt';
 import { PromptElementCtor } from '../../prompts/node/base/promptElement';
 import { PromptRenderer } from '../../prompts/node/base/promptRenderer';
@@ -34,6 +34,8 @@ export interface ISubagentToolCallingLoopOptions extends IToolCallingLoopOptions
 	allowedTools?: Set<ToolName>;
 	/** Optional: custom prompt class to use instead of AgentPrompt */
 	customPromptClass?: PromptElementCtor;
+	/** If true, do one more LLM call without tools after hitting limit to force a text response */
+	forceFinalAnswer?: boolean;
 }
 
 export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallingLoopOptions> {
@@ -113,70 +115,23 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 	}
 
 	private async getEndpoint(request: ChatRequest) {
-		// Log available models for debugging
-		await this.logAvailableModels();
-
-		// Define the model to use for search subagent
-		// This should match a model configured in github.copilot.chat.customOAIModels setting
-		const modelSelector = {
-			vendor: 'customoai',
-			id: 'accounts/msft/deployments/r1bjhiof'
-		};
+		// Use the same model as the main agent to ensure consistent tool calling behavior
+		this._logService.info('[SubagentToolCallingLoop] Using main agent model (from request)');
+		const endpoint = await this.endpointProvider.getChatEndpoint(request);
+		this._logService.info('[SubagentToolCallingLoop] Selected endpoint:', {
+			endpointModel: endpoint.model,
+			endpointFamily: endpoint.family,
+			supportsToolCalls: endpoint.supportsToolCalls,
+			supportsVision: endpoint.supportsVision
+		});
 		
-		this._logService.info('[SubagentToolCallingLoop] Attempting to select model:', JSON.stringify(modelSelector, null, 2));
-		
-		try {
-			// Use vscode.lm.selectChatModels to get the actual registered model
-			const models = await vscode.lm.selectChatModels(modelSelector);
-			
-			if (!models || models.length === 0) {
-				const errorMsg = `No models found matching selector: ${JSON.stringify(modelSelector)}. Ensure the model is configured in github.copilot.chat.customOAIModels setting.`;
-				this._logService.error(`[SubagentToolCallingLoop] ${errorMsg}`);
-				throw new Error(errorMsg);
-			}
-			
-			const qwenModel = models[0];
-			this._logService.info('[SubagentToolCallingLoop] Selected model from VS Code:', JSON.stringify({
-				vendor: qwenModel.vendor,
-				id: qwenModel.id,
-				name: qwenModel.name,
-				family: qwenModel.family,
-				hasCapabilities: !!qwenModel.capabilities,
-				supportsToolCalling: qwenModel.capabilities?.supportsToolCalling
-			}, null, 2));
-			
-			// Pass the actual registered model to getChatEndpoint
-			const endpoint = await this.endpointProvider.getChatEndpoint(qwenModel);
-			
-			this._logService.info('[SubagentToolCallingLoop] Successfully selected endpoint:', {
-				requestedModelId: modelSelector.id,
-				requestedModelVendor: modelSelector.vendor,
-				endpointModel: endpoint.model,
-				endpointFamily: endpoint.family,
-				supportsToolCalls: endpoint.supportsToolCalls,
-				supportsVision: endpoint.supportsVision,
-				isExtensionContributed: endpoint.isExtensionContributed
-			});
-			
-			if (!endpoint.supportsToolCalls) {
-				const errorMsg = `Selected model ${qwenModel.id} does not support tool calls, which is required for search subagent`;
-				this._logService.error(`[SubagentToolCallingLoop] ${errorMsg}`);
-				throw new Error(errorMsg);
-			}
-			
-			return endpoint;
-		} catch (error) {
-			// Log full error details and throw instead of falling back
-			this._logService.error('[SubagentToolCallingLoop] ========================================');
-			this._logService.error('[SubagentToolCallingLoop] FAILED TO GET ENDPOINT');
-			this._logService.error('[SubagentToolCallingLoop] ========================================');
-			this._logService.error('[SubagentToolCallingLoop] Requested model selector:', JSON.stringify(modelSelector, null, 2));
-			this._logService.error('[SubagentToolCallingLoop] Error type:', error?.constructor?.name);
-			this._logService.error('[SubagentToolCallingLoop] Error message:', error instanceof Error ? error.message : String(error));
-			this._logService.error('[SubagentToolCallingLoop] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-			this._logService.error('[SubagentToolCallingLoop] ========================================');
-			throw new Error(`Failed to get endpoint for search subagent with model ${modelSelector.id}: ${error instanceof Error ? error.message : String(error)}`);
+		if (!endpoint.supportsToolCalls) {
+			const errorMsg = `Model ${endpoint.model} does not support tool calls, which is required for subagent`;
+			this._logService.error(`[SubagentToolCallingLoop] ${errorMsg}`);
+			throw new Error(errorMsg);
 		}
+		
+		return endpoint;
 	}
 
 	protected async buildPrompt(promptContext: IBuildPromptContext, progress: Progress<ChatResponseReferencePart | ChatResponseProgressPart>, token: CancellationToken): Promise<IBuildPromptResult> {
@@ -257,5 +212,50 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 				messageSource: SubagentToolCallingLoop.ID
 			},
 		}, token);
+	}
+
+	public override async run(outputStream: ChatResponseStream | undefined, token: CancellationToken): Promise<IToolCallLoopResult> {
+		// Run the normal loop
+		const result = await super.run(outputStream, token);
+
+		// If forceFinalAnswer is enabled and we hit the tool limit without a good response,
+		// do one more call WITHOUT tools to force the model to produce a text answer
+		if (this.options.forceFinalAnswer) {
+			const lastResponse = result.toolCallRounds.at(-1)?.response ?? result.round?.response ?? '';
+			const hasAnswer = lastResponse.includes('<debug_answer>') || lastResponse.trim().length > 100;
+			
+			if (!hasAnswer && result.toolCallRounds.length >= this.options.toolCallLimit) {
+				this._logService.info('[SubagentToolCallingLoop] Forcing final answer - doing one more call without tools');
+				
+				// Build prompt context WITHOUT tools to force text response
+				const context = this.createPromptContext([], outputStream);
+				context.toolCallRounds = result.toolCallRounds;
+				context.toolCallResults = result.toolCallResults;
+				
+				const buildResult = await this.buildPrompt(context, { report: () => {} }, token);
+				
+				// Make a request without tools
+				const finalResponse = await this.fetch({
+					messages: buildResult.messages,
+					requestOptions: { tools: undefined }, // No tools!
+				}, token);
+				
+				if (finalResponse.type === 'success' && finalResponse.message) {
+					// Update the result with the final text response
+					const finalRound = {
+						response: finalResponse.message,
+						toolCalls: [],
+						calls: [],
+						results: {},
+					};
+					result.toolCallRounds.push(finalRound);
+					result.round = finalRound;
+					result.response = finalResponse;
+					this._logService.info('[SubagentToolCallingLoop] Got final answer:', finalResponse.message.substring(0, 200));
+				}
+			}
+		}
+
+		return result;
 	}
 }

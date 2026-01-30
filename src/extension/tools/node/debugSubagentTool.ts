@@ -96,6 +96,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			promptText: question,
 			allowedTools,
 			customPromptClass: DebugSubagentPrompt as typeof DebugSubagentPrompt & PromptElementCtor,
+			forceFinalAnswer: true, // Force a text response if hitting tool limit without answer
 		});
 
 		const stream = this._inputContext?.stream && ChatResponseStreamImpl.filter(

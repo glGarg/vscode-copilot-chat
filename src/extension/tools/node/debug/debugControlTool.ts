@@ -87,24 +87,67 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 			const output = result.output || '';
 			let statusMessage: string;
 
+			// Helper to get source code and locals for context
+			const getSourceAndLocals = async (): Promise<{ source: string; locals: string }> => {
+				const [listResult, localsResult] = await Promise.all([
+					sendJdbCommand(session.sessionId, 'list', 2000),
+					sendJdbCommand(session.sessionId, 'locals', 2000)
+				]);
+				
+				// Parse source listing - JDB shows ~10 lines around current position with => marker
+				let source = '';
+				if (listResult.output && !listResult.output.includes('not available')) {
+					const lines = listResult.output.split('\n')
+						.filter(l => l.trim() && !l.includes('main[') && !l.includes('>'));
+					source = lines.join('\n');
+				}
+				
+				// Parse locals
+				let locals = '';
+				if (localsResult.output && !localsResult.output.includes('No local variables')) {
+					const lines = localsResult.output.split('\n')
+						.filter(l => l.trim() && !l.includes('main[') && !l.includes('>'));
+					locals = lines.join('\n');
+				}
+				
+				return { source, locals };
+			};
+
 			if (action === 'continue' || action === 'run') {
 				if (output.includes('Breakpoint hit')) {
 					// Extract breakpoint location
 					const match = output.match(/Breakpoint hit:.*?"thread=([^"]+)".*?(\S+)\(\),\s*line=(\d+)/);
+					
+					// Auto-fetch source and locals
+					const { source, locals } = await getSourceAndLocals();
+					
 					if (match) {
 						const [, thread, method, line] = match;
 						statusMessage = `🎯 BREAKPOINT HIT!\n\n` +
 							`Location: ${method}() at line ${line}\n` +
-							`Thread: ${thread}\n\n` +
-							`Now you can inspect:\n` +
-							`- debug_inspect({action: "locals"}) - see local variables\n` +
-							`- debug_inspect({action: "eval", expression: "varName"}) - evaluate expression\n` +
-							`- debug_inspect({action: "stack"}) - see call stack\n` +
-							`- debug_control({action: "step_over"}) - execute next line\n` +
-							`- debug_control({action: "continue"}) - continue to next breakpoint`;
+							`Thread: ${thread}\n`;
 					} else {
-						statusMessage = `🎯 BREAKPOINT HIT!\n\n${output.trim()}\n\nUse debug_inspect to examine state.`;
+						statusMessage = `🎯 BREAKPOINT HIT!\n\n${output.trim()}\n`;
 					}
+					
+					// Add source code
+					if (source) {
+						statusMessage += `\n📄 SOURCE CODE:\n${source}\n`;
+					}
+					
+					// Add locals
+					if (locals) {
+						statusMessage += `\n📋 LOCAL VARIABLES:\n${locals}\n`;
+					} else {
+						statusMessage += `\n📋 LOCAL VARIABLES: (none at this point)\n`;
+					}
+					
+					statusMessage += `\nNext steps:\n` +
+						`• debug_control({action: "step_over"}) - execute next line\n` +
+						`• debug_control({action: "step_into"}) - step into method call\n` +
+						`• debug_control({action: "continue"}) - run to next breakpoint\n` +
+						`• debug_inspect({action: "eval", expression: "expr"}) - evaluate expression`;
+						
 				} else if (output.includes('The application exited')) {
 					statusMessage = `⚠️ APPLICATION EXITED - No breakpoint was hit\n\n` +
 						`The test ran to completion without hitting any breakpoints.\n` +
@@ -123,12 +166,27 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 			} else if (action === 'step_into' || action === 'step_over' || action === 'step_out') {
 				// Extract current location after step
 				const match = output.match(/Step completed:.*?(\S+)\(\),\s*line=(\d+)/);
+				
+				// Auto-fetch source and locals after stepping
+				const { source, locals } = await getSourceAndLocals();
+				
 				if (match) {
 					const [, method, line] = match;
-					statusMessage = `👣 STEPPED to ${method}() line ${line}\n\n` +
-						`Use debug_inspect({action: "locals"}) to see variables at this location.`;
+					statusMessage = `👣 STEPPED to ${method}() line ${line}\n`;
 				} else {
-					statusMessage = `👣 STEP ${action.replace('_', ' ').toUpperCase()}\n\n${output.trim() || 'Step completed'}`;
+					statusMessage = `👣 STEP ${action.replace('_', ' ').toUpperCase()}\n\n${output.trim() || 'Step completed'}\n`;
+				}
+				
+				// Add source code
+				if (source) {
+					statusMessage += `\n📄 SOURCE CODE:\n${source}\n`;
+				}
+				
+				// Add locals
+				if (locals) {
+					statusMessage += `\n📋 LOCAL VARIABLES:\n${locals}`;
+				} else {
+					statusMessage += `\n📋 LOCAL VARIABLES: (none at this point)`;
 				}
 			} else {
 				statusMessage = `✅ ${action.toUpperCase()} completed\n\n${output.trim() || 'No output'}`;

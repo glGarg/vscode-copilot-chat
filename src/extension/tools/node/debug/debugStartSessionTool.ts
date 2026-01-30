@@ -194,8 +194,32 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				result = await this.waitForBreakpointOrCompletion(sessionId, testProcess, timeout * 1000);
 			}
 
+			// If we hit a breakpoint or exception, auto-fetch source code and locals
+			let sourceCode = '';
+			let localVars = '';
+			if (result.status === 'breakpoint_hit' || result.status === 'exception_caught') {
+				const [listResult, localsResult] = await Promise.all([
+					sendJdbCommand(sessionId, 'list', 2000),
+					sendJdbCommand(sessionId, 'locals', 2000)
+				]);
+				
+				// Parse source listing
+				if (listResult.output && !listResult.output.includes('not available')) {
+					const lines = listResult.output.split('\n')
+						.filter(l => l.trim() && !l.includes('main[') && !l.includes('>'));
+					sourceCode = lines.join('\n');
+				}
+				
+				// Parse locals
+				if (localsResult.output && !localsResult.output.includes('No local variables')) {
+					const lines = localsResult.output.split('\n')
+						.filter(l => l.trim() && !l.includes('main[') && !l.includes('>'));
+					localVars = lines.join('\n');
+				}
+			}
+
 			// Format and return result
-			return this.formatResult(result, breakpointResults, buildSystem);
+			return this.formatResult(result, breakpointResults, buildSystem, sourceCode, localVars);
 
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
@@ -477,7 +501,9 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 	private formatResult(
 		result: DebugSessionResult, 
 		breakpointResults: string[], 
-		buildSystem: string
+		buildSystem: string,
+		sourceCode: string = '',
+		localVars: string = ''
 	): ExtendedLanguageModelToolResult {
 		let message: string;
 
@@ -486,17 +512,26 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				message = 
 					`🎯 BREAKPOINT HIT!\n\n` +
 					`Location: ${result.location}\n` +
-					(result.thread ? `Thread: ${result.thread}\n` : '') +
-					(breakpointResults.length > 0 ? `\nBreakpoints configured:\n${breakpointResults.map(r => `  • ${r}`).join('\n')}\n` : '') +
-					`\n` +
-					`Session is now paused. You can:\n` +
-					`• debug_inspect({action: "locals"}) - view local variables\n` +
-					`• debug_inspect({action: "eval", expression: "varName"}) - evaluate expression\n` +
-					`• debug_inspect({action: "stack"}) - view call stack\n` +
-					`• debug_breakpoint({action: "set", className: "X", method: "y"}) - add more breakpoints\n` +
+					(result.thread ? `Thread: ${result.thread}\n` : '');
+				
+				// Add source code if available
+				if (sourceCode) {
+					message += `\n📄 SOURCE CODE:\n${sourceCode}\n`;
+				}
+				
+				// Add local variables if available
+				if (localVars) {
+					message += `\n📋 LOCAL VARIABLES:\n${localVars}\n`;
+				} else {
+					message += `\n📋 LOCAL VARIABLES: (none at this point)\n`;
+				}
+				
+				message += `\nNext steps:\n` +
 					`• debug_control({action: "step_over"}) - execute next line\n` +
 					`• debug_control({action: "step_into"}) - step into method call\n` +
-					`• debug_control({action: "continue"}) - run to next breakpoint`;
+					`• debug_control({action: "continue"}) - run to next breakpoint\n` +
+					`• debug_inspect({action: "eval", expression: "expr"}) - evaluate expression\n` +
+					`• debug_inspect({action: "stack"}) - view call stack`;
 				break;
 
 			case 'exception_caught':
@@ -521,10 +556,21 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 					message = 
 						`⚠️ EXCEPTION CAUGHT!\n\n` +
 						`Type: ${result.exceptionType}\n` +
-						`${result.exceptionMessage}\n\n` +
-						`Session is paused at exception. You can:\n` +
-						`• debug_inspect({action: "locals"}) - view variables at exception point\n` +
+						`${result.exceptionMessage}\n`;
+					
+					// Add source code if available
+					if (sourceCode) {
+						message += `\n📄 SOURCE CODE:\n${sourceCode}\n`;
+					}
+					
+					// Add local variables if available
+					if (localVars) {
+						message += `\n📋 LOCAL VARIABLES:\n${localVars}\n`;
+					}
+					
+					message += `\nSession is paused at exception. You can:\n` +
 						`• debug_inspect({action: "stack"}) - view call stack\n` +
+						`• debug_inspect({action: "eval", expression: "expr"}) - evaluate expression\n` +
 						`• debug_inspect({action: "this"}) - view current object`;
 				}
 				break;

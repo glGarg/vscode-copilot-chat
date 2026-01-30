@@ -148,10 +148,15 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					toolCallMode={CopilotToolMode.FullContext}
 				/>
 				{isLastTurn && (
-					<AssistantMessage priority={898}>
-						Based on my debugging investigation, here is my answer:
-						&lt;debug_answer&gt;
-					</AssistantMessage>
+					<>
+						<UserMessage priority={899}>
+							IMPORTANT: You have reached the tool call limit. You MUST now provide your final answer based on what you observed during debugging. Do NOT attempt to make more tool calls. Summarize your findings in the debug_answer format below.
+						</UserMessage>
+						<AssistantMessage priority={898}>
+							Based on my debugging investigation, here is my answer:
+							&lt;debug_answer&gt;
+						</AssistantMessage>
+					</>
 				)}
 			</>
 		);

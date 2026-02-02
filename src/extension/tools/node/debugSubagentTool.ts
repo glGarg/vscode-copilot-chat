@@ -23,6 +23,8 @@ export interface IDebugSubagentParams {
 	question: string;
 	/** File path to focus on (optional - helps target breakpoints) */
 	file?: string;
+	/** @deprecated Use 'tests' instead. Single test name for backward compatibility. */
+	test?: string;
 	/** Test(s) to run to reproduce the issue (optional) - single test or array of tests */
 	tests?: string | string[];
 	/** Specific line number to set breakpoint (optional) */
@@ -43,7 +45,10 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 	) { }
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugSubagentParams>, token: vscode.CancellationToken) {
-		const { question, file, tests, line, variables, context } = options.input;
+		const { question, file, test, tests, line, variables, context } = options.input;
+		
+		// Handle backward compatibility: use tests if provided, otherwise fall back to test
+		const testParam = tests || (test ? test : undefined);
 		
 		// Build a structured debug instruction from the input
 		let debugInstruction = `Debug Question: ${question}`;
@@ -53,8 +58,8 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		if (line) {
 			debugInstruction += `\nLine: ${line}`;
 		}
-		if (tests) {
-			const testList = Array.isArray(tests) ? tests : [tests];
+		if (testParam) {
+			const testList = Array.isArray(testParam) ? testParam : [testParam];
 			debugInstruction += `\nTest(s) to run: ${testList.join(', ')}`;
 		}
 		if (variables && variables.length > 0) {

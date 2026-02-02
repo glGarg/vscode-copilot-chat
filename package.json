@@ -216,6 +216,10 @@
 							"type": "string",
 							"description": "File path to focus on (helps target breakpoints). Optional."
 						},
+						"test": {
+							"type": "string",
+							"description": "DEPRECATED: Use 'tests' instead. Single test name for backward compatibility. Optional."
+						},
 						"tests": {
 							"oneOf": [
 								{ "type": "string" },

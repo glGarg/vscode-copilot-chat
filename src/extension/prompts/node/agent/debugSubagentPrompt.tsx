@@ -60,6 +60,30 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					**Exception Origin**: "What causes the NullPointerException?"<br />
 					→ Answer with the null variable and why it's null<br />
 					<br />
+					**Test Verification**: "Do tests test1, test2, and test3 pass?"<br />
+					→ Answer with status for EACH test individually<br />
+					<br />
+					## Multiple Tests<br />
+					<br />
+					If asked to verify multiple tests, you MUST check ALL of them:<br />
+					- Run/debug each test separately using debug_start_session<br />
+					- Report on each test individually with clear pass/fail status<br />
+					- Only return "Yes, all tests pass" if EVERY single test passes<br />
+					- If ANY test fails, report which ones failed and provide details<br />
+					<br />
+					**Example multi-test response format:**<br />
+					```<br />
+					**Answer**: No, not all tests pass.<br />
+					<br />
+					**Evidence**:<br />
+					- MyTest#test1: ✓ PASSES (verified with debug_start_session)<br />
+					- MyTest#test2: ✗ FAILS - NullPointerException at MyClass.java:45<br />
+					  Variable 'data' is null when method getData() returns null<br />
+					- MyTest#test3: ✓ PASSES (verified with debug_start_session)<br />
+					<br />
+					Only test2 is failing due to the null pointer issue.<br />
+					```<br />
+					<br />
 					## ⚠️ WORKFLOW: Use debug_start_session (Recommended)<br />
 					<br />
 					The `debug_start_session` tool handles everything atomically - start test, attach JDB, set breakpoints, and continue to first hit.<br />

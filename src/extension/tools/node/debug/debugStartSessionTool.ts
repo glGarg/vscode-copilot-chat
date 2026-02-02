@@ -451,13 +451,10 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 		// Check for application exit
 		if (output.includes('The application exited') || output.includes('application has been disconnected')) {
 			const testOutput = testProcess.output;
-			const passed = !testOutput.includes('FAILURE') && 
-			               !testOutput.includes('FAILED') && 
-			               !testOutput.includes('ERROR') && 
-			               !testOutput.includes('AssertionError');
+			const testPassed = this.parseTestOutput(testOutput);
 			return {
 				status: 'test_completed',
-				testPassed: passed,
+				testPassed,
 				testOutput: this.truncateOutput(testOutput, 2000)
 			};
 		}
@@ -467,6 +464,53 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 			status: 'timeout',
 			testOutput: this.truncateOutput(testProcess.output, 2000)
 		};
+	}
+
+	private parseTestOutput(testOutput: string): boolean {
+		// Try Maven patterns first (most specific and reliable)
+		// Format: "Tests run: X, Failures: Y, Errors: Z, Skipped: W"
+		const mavenPattern = /Tests run:\s*(\d+),\s*Failures:\s*(\d+),\s*Errors:\s*(\d+)/;
+		const mavenMatches = testOutput.match(mavenPattern);
+		if (mavenMatches) {
+			const failures = parseInt(mavenMatches[2]);
+			const errors = parseInt(mavenMatches[3]);
+			// Look for the LAST occurrence (final summary) to get overall result
+			const allMatches = testOutput.matchAll(/Tests run:\s*\d+,\s*Failures:\s*(\d+),\s*Errors:\s*(\d+)/g);
+			let lastFailures = failures;
+			let lastErrors = errors;
+			for (const match of allMatches) {
+				lastFailures = parseInt(match[1]);
+				lastErrors = parseInt(match[2]);
+			}
+			return lastFailures === 0 && lastErrors === 0;
+		}
+
+		// Try Gradle patterns
+		if (testOutput.includes('BUILD SUCCESSFUL')) {
+			return true;
+		}
+		if (testOutput.includes('BUILD FAILED')) {
+			return false;
+		}
+		
+		// Try JUnit patterns
+		if (testOutput.match(/OK\s*\(\d+\s+tests?\)/i)) {
+			return true;
+		}
+		if (testOutput.includes('FAILURES!!!')) {
+			return false;
+		}
+
+		// Fallback: Check for common failure indicators
+		// This is less reliable but covers cases where build tool output is minimal
+		const hasFailureIndicators = 
+			testOutput.includes('FAILURE') ||
+			testOutput.includes('FAILED') ||
+			testOutput.includes('ERROR') ||
+			testOutput.includes('AssertionError') ||
+			testOutput.includes('java.lang.AssertionError');
+		
+		return !hasFailureIndicators;
 	}
 
 	private truncateOutput(output: string, maxLen: number): string {

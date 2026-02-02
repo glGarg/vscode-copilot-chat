@@ -216,9 +216,12 @@
 							"type": "string",
 							"description": "File path to focus on (helps target breakpoints). Optional."
 						},
-						"test": {
-							"type": "string",
-							"description": "Fully qualified test name to run (e.g., 'com.example.MyTest#testMethod'). Optional."
+						"tests": {
+							"oneOf": [
+								{ "type": "string" },
+								{ "type": "array", "items": { "type": "string" } }
+							],
+							"description": "Fully qualified test name(s) to run. Can be a single test (e.g., 'com.example.MyTest#testMethod') or multiple tests (e.g., ['com.example.MyTest#test1', 'com.example.MyTest#test2']). Optional."
 						},
 						"line": {
 							"type": "number",

@@ -39,7 +39,7 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				**Step 1: Understand the bug** (before making changes)<br />
 				```<br />
-				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", test: "com.example.MyTest#testMethod"{'}'})<br />
+				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", tests: "com.example.MyTest#testMethod"{'}'})<br />
 				```<br />
 				Be specific - include the actual test name rather than saying "the failing test".<br />
 				<br />
@@ -53,28 +53,49 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				**Step 4: Verify the fix works**<br />
 				```<br />
-				debug_subagent({'{'}question: "Does the test pass now after my fix?"{'}'})<br />
+				// If multiple tests were failing, check ALL of them:<br />
+				debug_subagent({'{'}
+				  question: "Do all the failing tests pass now after my fix?",
+				  tests: ["com.example.MyTest#test1", "com.example.MyTest#test2", "com.example.MyTest#test3"]
+				{'}'})<br />
 				```<br />
 				<br />
-				### Example Session:<br />
+				### Validation Loop - CRITICAL<br />
+				<br />
+				After applying a fix, verify it worked. If tests still fail, iterate:<br />
 				<br />
 				```<br />
-				// Using debug_subagent throughout:<br />
-				1. debug_subagent: "What exception in DubboEnumSetTest?"<br />
-				   → "ClassCastException at line 335"<br />
-				2. debug_subagent: "What is listType at line 335?"<br />
-				   → "listType=RegularEnumSet but this.listType=ArrayList"<br />
-				3. Apply fix to preserve listType<br />
-				4. debug_subagent: "Does DubboEnumSetTest pass now?"<br />
-				   → "Yes, test passes"<br />
-				5. Done!<br />
+				while (tests still failing AND attempts {'<'} 3) {'{'}<br />
+				  1. Use debug_subagent to understand the current failure<br />
+				  2. Apply your fix based on the evidence<br />
+				  3. Verify the fix with debug_subagent<br />
+				  4. If tests still fail, go back to step 1 with a new debug question<br />
+				{'}'}<br />
+				```<br />
+				<br />
+				**Example with iteration:**<br />
+				```<br />
+				// First attempt:<br />
+				1. debug_subagent: "What causes NullPointerException in com.example.MyTest#testMethod?"<br />
+				   → "variable X is null at line 50"<br />
+				2. Apply fix: Add null check for X<br />
+				3. debug_subagent: "Does com.example.MyTest#testMethod pass now?"<br />
+				   → "No, ArrayIndexOutOfBoundsException at line 60"<br />
+				<br />
+				// Second attempt - iterate:<br />
+				4. debug_subagent: "What causes the ArrayIndexOutOfBoundsException in com.example.MyTest#testMethod?"<br />
+				   → "Array length is 5 but accessing index 10"<br />
+				5. Apply fix: Add bounds check<br />
+				6. debug_subagent: "Does com.example.MyTest#testMethod pass now?"<br />
+				   → "Yes, test passes" ✓ Success!<br />
 				```<br />
 				<br />
 				### Tips:<br />
 				- debug_subagent handles compilation automatically (incremental builds are fast)<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
+				- If multiple tests fail, pass ALL failing tests to debug_subagent for verification<br />
 				- Use it to verify fixes rather than assuming they work<br />
-				- If a fix doesn't work, use debug_subagent to understand why<br />
+				- If a fix doesn't work, use debug_subagent to understand why and iterate<br />
 			</Tag>
 			</>}
 			<Tag name='personality'>

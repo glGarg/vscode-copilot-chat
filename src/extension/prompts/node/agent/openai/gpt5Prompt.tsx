@@ -66,7 +66,7 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				```<br />
 				while (tests still failing AND attempts {'<'} 3) {'{'}<br />
-				  1. Use debug_subagent to understand the current failure<br />
+				  1. Use debug_subagent to understand the current failure (NOT to verify if it passes)<br />
 				  2. Apply your fix based on the evidence<br />
 				  3. Run the actual test command (mvn test / gradle test) via run_in_terminal<br />
 				  4. Check the test output - did tests pass?<br />
@@ -91,6 +91,24 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				6. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
 				   → Output: "Tests run: 1, Failures: 0, Errors: 0" ✓ Success!<br />
 				```<br />
+				<br />
+				### ⚠️ CRITICAL: Verification Rules<br />
+				<br />
+				**NEVER use debug_subagent to verify if tests pass.**<br />
+				<br />
+				debug_subagent cannot reliably determine if tests pass because:<br />
+				- Tests may fail without throwing exceptions<br />
+				- Assertions may be caught/handled<br />
+				- Test frameworks report results differently<br />
+				<br />
+				**ALWAYS verify with actual test commands:**<br />
+				```<br />
+				run_in_terminal: "mvn test -Dtest=TestClass#testMethod"<br />
+				→ Parse output: "Tests run: X, Failures: Y, Errors: Z"<br />
+				→ If Y=0 and Z=0: Test passes ✓<br />
+				```<br />
+				<br />
+				**Use debug_subagent ONLY to understand failures, never to verify passes.**<br />
 				<br />
 				### Tips:<br />
 				- debug_subagent handles compilation automatically (incremental builds are fast)<br />

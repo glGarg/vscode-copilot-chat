@@ -62,14 +62,16 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				### Validation Loop - CRITICAL<br />
 				<br />
-				After applying a fix, verify it worked. If tests still fail, iterate:<br />
+				After applying a fix, verify it worked by running actual tests. If tests still fail, iterate:<br />
 				<br />
 				```<br />
 				while (tests still failing AND attempts {'<'} 3) {'{'}<br />
 				  1. Use debug_subagent to understand the current failure<br />
 				  2. Apply your fix based on the evidence<br />
-				  3. Verify the fix with debug_subagent<br />
-				  4. If tests still fail, go back to step 1 with a new debug question<br />
+				  3. Run the actual test command (mvn test / gradle test) via run_in_terminal<br />
+				  4. Check the test output - did tests pass?<br />
+				     • If YES: Done! ✓<br />
+				     • If NO: Go back to step 1 with debug_subagent to understand the new failure<br />
 				{'}'}<br />
 				```<br />
 				<br />
@@ -79,23 +81,23 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				1. debug_subagent: "What causes NullPointerException in com.example.MyTest#testMethod?"<br />
 				   → "variable X is null at line 50"<br />
 				2. Apply fix: Add null check for X<br />
-				3. debug_subagent: "Does com.example.MyTest#testMethod pass now?"<br />
-				   → "No, ArrayIndexOutOfBoundsException at line 60"<br />
+				3. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
+				   → Output: "Tests run: 1, Failures: 1" ✗ Still failing!<br />
 				<br />
 				// Second attempt - iterate:<br />
 				4. debug_subagent: "What causes the ArrayIndexOutOfBoundsException in com.example.MyTest#testMethod?"<br />
 				   → "Array length is 5 but accessing index 10"<br />
 				5. Apply fix: Add bounds check<br />
-				6. debug_subagent: "Does com.example.MyTest#testMethod pass now?"<br />
-				   → "Yes, test passes" ✓ Success!<br />
+				6. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
+				   → Output: "Tests run: 1, Failures: 0, Errors: 0" ✓ Success!<br />
 				```<br />
 				<br />
 				### Tips:<br />
 				- debug_subagent handles compilation automatically (incremental builds are fast)<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
-				- If multiple tests fail, pass ALL failing tests to debug_subagent for verification<br />
-				- Use it to verify fixes rather than assuming they work<br />
-				- If a fix doesn't work, use debug_subagent to understand why and iterate<br />
+				- If multiple tests fail, pass ALL failing tests to debug_subagent to understand them<br />
+				- ALWAYS verify fixes by running actual test commands (mvn test / gradle test)<br />
+				- If a fix doesn't work, iterate with another round of debugging via debug_subagent<br />
 			</Tag>
 			</>}
 			<Tag name='personality'>

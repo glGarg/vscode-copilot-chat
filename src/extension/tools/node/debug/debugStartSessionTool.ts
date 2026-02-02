@@ -44,7 +44,6 @@ interface DebugSessionResult {
 	thread?: string;
 	exceptionType?: string;
 	exceptionMessage?: string;
-	testPassed?: boolean;
 	testOutput?: string;
 	error?: string;
 }
@@ -451,10 +450,8 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 		// Check for application exit
 		if (output.includes('The application exited') || output.includes('application has been disconnected')) {
 			const testOutput = testProcess.output;
-			const testPassed = this.parseTestOutput(testOutput);
 			return {
 				status: 'test_completed',
-				testPassed,
 				testOutput: this.truncateOutput(testOutput, 2000)
 			};
 		}
@@ -466,52 +463,7 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 		};
 	}
 
-	private parseTestOutput(testOutput: string): boolean {
-		// Try Maven patterns first (most specific and reliable)
-		// Format: "Tests run: X, Failures: Y, Errors: Z, Skipped: W"
-		const mavenPattern = /Tests run:\s*(\d+),\s*Failures:\s*(\d+),\s*Errors:\s*(\d+)/;
-		const mavenMatches = testOutput.match(mavenPattern);
-		if (mavenMatches) {
-			const failures = parseInt(mavenMatches[2]);
-			const errors = parseInt(mavenMatches[3]);
-			// Look for the LAST occurrence (final summary) to get overall result
-			const allMatches = testOutput.matchAll(/Tests run:\s*\d+,\s*Failures:\s*(\d+),\s*Errors:\s*(\d+)/g);
-			let lastFailures = failures;
-			let lastErrors = errors;
-			for (const match of allMatches) {
-				lastFailures = parseInt(match[1]);
-				lastErrors = parseInt(match[2]);
-			}
-			return lastFailures === 0 && lastErrors === 0;
-		}
 
-		// Try Gradle patterns
-		if (testOutput.includes('BUILD SUCCESSFUL')) {
-			return true;
-		}
-		if (testOutput.includes('BUILD FAILED')) {
-			return false;
-		}
-		
-		// Try JUnit patterns
-		if (testOutput.match(/OK\s*\(\d+\s+tests?\)/i)) {
-			return true;
-		}
-		if (testOutput.includes('FAILURES!!!')) {
-			return false;
-		}
-
-		// Fallback: Check for common failure indicators
-		// This is less reliable but covers cases where build tool output is minimal
-		const hasFailureIndicators = 
-			testOutput.includes('FAILURE') ||
-			testOutput.includes('FAILED') ||
-			testOutput.includes('ERROR') ||
-			testOutput.includes('AssertionError') ||
-			testOutput.includes('java.lang.AssertionError');
-		
-		return !hasFailureIndicators;
-	}
 
 	private truncateOutput(output: string, maxLen: number): string {
 		if (output.length <= maxLen) return output;
@@ -575,14 +527,15 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 
 			case 'test_completed':
 				message = 
-					`📋 TEST COMPLETED ${result.testPassed ? '✅ PASSED' : '❌ FAILED'}\n\n` +
+					`📋 TEST COMPLETED\n\n` +
 					`No breakpoint was hit - the test ran to completion.\n\n` +
 					(breakpointResults.length > 0 ? `Breakpoints that were set:\n${breakpointResults.map(r => `  • ${r}`).join('\n')}\n\n` : '') +
-					`Possible reasons:\n` +
-					`• Breakpoint location was not reached in this test path\n` +
-					`• Class or method name was incorrect\n` +
-					`• The breakpoint was deferred but class never loaded\n\n` +
-					`Test output:\n${result.testOutput || '(no output captured)'}`;
+					`Check the test output below to determine if the test passed or failed:\n\n` +
+					`Test output:\n${result.testOutput || '(no output captured)'}\n\n` +
+					`Look for patterns like:\n` +
+					`• Maven: "Tests run: X, Failures: Y, Errors: Z" (pass if Y=0 and Z=0)\n` +
+					`• Gradle: "BUILD SUCCESSFUL" (pass) or "BUILD FAILED" (fail)\n` +
+					`• JUnit: "OK (N tests)" (pass) or "FAILURES!!!" (fail)`;
 				break;
 
 			case 'timeout':

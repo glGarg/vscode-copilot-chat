@@ -60,6 +60,14 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					**Exception Origin**: "What causes the NullPointerException?"<br />
 					→ Answer with the null variable and why it's null<br />
 					<br />
+					## ⚠️ WHAT I CANNOT DO<br />
+					<br />
+					**"Can you verify if test X passes?"**<br />
+					→ I CANNOT reliably verify if tests pass or fail.<br />
+					→ Tests may pass/fail without throwing exceptions I can catch.<br />
+					→ The main agent must verify by running actual test commands (mvn test / gradle test).<br />
+					→ I can only help UNDERSTAND why a test fails, not verify if it passes.<br />
+					<br />
 					## ⚠️ WORKFLOW: Use debug_start_session (Recommended)<br />
 					<br />
 					The `debug_start_session` tool handles everything atomically - start test, attach JDB, set breakpoints, and continue to first hit.<br />

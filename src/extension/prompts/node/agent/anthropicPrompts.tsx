@@ -149,7 +149,7 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 			<Tag name='debug_subagent_instructions'>
 				## Using debug_subagent for Bug Fixing<br />
 				<br />
-				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
+				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help you understand why tests fail. Use it to investigate bugs before making changes.<br />
 				<br />
 				### Prerequisite: Build Before Debugging<br />
 				<br />
@@ -167,9 +167,13 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 				- "Why does `condition` evaluate to true/false at line N?"<br />
 				- "What is `this.field` vs `parameter` at the branch point?"<br />
 				<br />
-				**Step 3: Verify the fix**<br />
-				- "After my change, does the test now pass?"<br />
-				- "After the fix, what is the value of `variable` at line N?"<br />
+				**Step 3: Apply your fix**<br />
+				<br />
+				**Step 4: Verify the fix by running actual tests**<br />
+				```<br />
+				run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
+				→ Parse output: "Tests run: X, Failures: Y, Errors: Z"<br />
+				```<br />
 				<br />
 				### How to Call<br />
 				<br />
@@ -184,21 +188,61 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 				{'}'})<br />
 				```<br />
 				<br />
-				### Example Session<br />
+				### Validation Loop - CRITICAL<br />
 				<br />
-				**Step 1 (Reproduction)**: debug_subagent({'{'}question: "What exception is thrown in EnumSetTest?"{'}'})<br />
-				→ "ClassCastException at line 335: RegularEnumSet cannot be cast to ArrayList"<br />
+				After applying a fix, verify it worked by running actual tests. If tests still fail, iterate:<br />
 				<br />
-				**Step 2 (Understanding)**: debug_subagent({'{'}question: "What is listType vs this.listType at line 335?", file: "ObjectReaderImplList.java"{'}'})<br />
-				→ "listType=RegularEnumSet, this.listType=ArrayList - they differ causing wrong instantiation"<br />
+				```<br />
+				while (tests still failing AND attempts {'<'} 3) {'{'}<br />
+				  1. Use debug_subagent to understand the current failure (NOT to verify if it passes)<br />
+				  2. Apply your fix based on the evidence<br />
+				  3. Run the actual test command (mvn test / gradle test) via run_in_terminal<br />
+				  4. Check the test output - did tests pass?<br />
+				     • If YES: Done! ✓<br />
+				     • If NO: Go back to step 1 with debug_subagent to understand the new failure<br />
+				{'}'}<br />
+				```<br />
 				<br />
-				**Step 3 (After fix)**: debug_subagent({'{'}question: "After my fix, does EnumSetTest pass?"{'}'})<br />
-				→ "Yes, the test now passes. listType is correctly preserved."<br />
+				### Example with iteration<br />
+				<br />
+				```<br />
+				// First attempt:<br />
+				1. debug_subagent: "What causes NullPointerException in com.example.MyTest#testMethod?"<br />
+				   → "variable X is null at line 50"<br />
+				2. Apply fix: Add null check for X<br />
+				3. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
+				   → Output: "Tests run: 1, Failures: 1" ✗ Still failing!<br />
+				<br />
+				// Second attempt - iterate:<br />
+				4. debug_subagent: "What causes the ArrayIndexOutOfBoundsException in com.example.MyTest#testMethod?"<br />
+				   → "Array length is 5 but accessing index 10"<br />
+				5. Apply fix: Add bounds check<br />
+				6. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
+				   → Output: "Tests run: 1, Failures: 0, Errors: 0" ✓ Success!<br />
+				```<br />
+				<br />
+				### ⚠️ CRITICAL: Verification Rules<br />
+				<br />
+				**NEVER use debug_subagent to verify if tests pass.**<br />
+				<br />
+				debug_subagent cannot reliably determine if tests pass because:<br />
+				- Tests may fail without throwing exceptions<br />
+				- Assertions may be caught/handled<br />
+				- Test frameworks report results differently<br />
+				<br />
+				**ALWAYS verify with actual test commands:**<br />
+				```<br />
+				run_in_terminal: "mvn test -Dtest=TestClass#testMethod"<br />
+				→ Parse output: "Tests run: X, Failures: Y, Errors: Z"<br />
+				→ If Y=0 and Z=0: Test passes ✓<br />
+				```<br />
+				<br />
+				**Use debug_subagent ONLY to understand failures, never to verify passes.**<br />
 				<br />
 				### Tips<br />
 				<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
-				- Use it to verify fixes rather than assuming they work<br />
+				- Use it to understand failures, but always verify with actual test commands<br />
 				- If a fix doesn't work, use debug_subagent to understand why<br />
 			</Tag>
 			</>}

@@ -8,188 +8,179 @@ import { ToolName } from '../../common/toolNames';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../../common/toolsRegistry';
 import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { LanguageModelTextPart, ExtendedLanguageModelToolResult } from '../../../../vscodeTypes';
-import { getActiveJdbSession, sendJdbCommand, terminateJdbSession } from './jdbSession';
+import { getActivePdbSession, sendPdbCommand, terminatePdbSession, parsePdbOutput } from './pdbSession';
 
 export interface IDebugControlParams {
 	/** Action to perform */
-	action: 'run' | 'continue' | 'step_into' | 'step_over' | 'step_out' | 'pause' | 'terminate';
-	/** Thread ID (optional, defaults to current thread) */
-	threadId?: string;
+	action: 'continue' | 'step_into' | 'step_over' | 'step_out' | 'until' | 'jump' | 'restart' | 'quit';
+	/** Line number (required for 'until' and 'jump' actions) */
+	lineno?: number;
 }
 
 class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 	public static readonly toolName = ToolName.DebugControl;
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugControlParams>, _token: vscode.CancellationToken) {
-		const { action, threadId } = options.input;
+		const { action, lineno } = options.input;
 
-		console.log('[DebugControlTool] Action:', action, { threadId });
+		console.log('[DebugControlTool] Action:', action, { lineno });
 
-		// Get active JDB session
-		const session = getActiveJdbSession();
+		// Get active PDB session
+		const session = getActivePdbSession();
 		if (!session) {
 			return new ExtendedLanguageModelToolResult([
 				new LanguageModelTextPart(
-					`❌ NO JDB SESSION\n\n` +
+					`❌ NO PDB SESSION\n\n` +
 					`You must start a debug session first:\n` +
-					`1. Start test in background: mvn test -Dtest=TestClass#method -Dmaven.surefire.debug > /tmp/test.log 2>&1 &\n` +
-					`2. Wait: sleep 5\n` +
-					`3. Attach: debug_start({mode: "attach", port: 5005})`
+					`debug_start_session({target: "script.py", initialBreakpoints: [...]})`
 				)
 			]);
 		}
 
 		try {
-			let jdbCommand: string;
+			let pdbCommand: string;
 
 			switch (action) {
-				case 'run':
-					jdbCommand = 'run';
-					break;
 				case 'continue':
-					jdbCommand = threadId ? `resume ${threadId}` : 'cont';
+					pdbCommand = 'c';
 					break;
 				case 'step_into':
-					jdbCommand = 'step';
+					pdbCommand = 's';
 					break;
 				case 'step_over':
-					jdbCommand = 'next';
+					pdbCommand = 'n';
 					break;
 				case 'step_out':
-					jdbCommand = 'step up';
+					pdbCommand = 'r';  // return - execute until current function returns
 					break;
-				case 'pause':
-					jdbCommand = threadId ? `suspend ${threadId}` : 'suspend';
+				case 'until':
+					if (lineno === undefined) {
+						return this.errorResult('lineno is required for "until" action');
+					}
+					pdbCommand = `unt ${lineno}`;  // continue until line >= lineno
 					break;
-				case 'terminate':
-					terminateJdbSession(session.sessionId);
+				case 'jump':
+					if (lineno === undefined) {
+						return this.errorResult('lineno is required for "jump" action');
+					}
+					pdbCommand = `j ${lineno}`;  // jump to line (skip code)
+					break;
+				case 'restart':
+					pdbCommand = 'run';  // restart the program
+					break;
+				case 'quit':
+					terminatePdbSession(session.sessionId);
 					return new ExtendedLanguageModelToolResult([
-						new LanguageModelTextPart(JSON.stringify({
-							status: 'terminated',
-							message: 'JDB session terminated'
-						}, null, 2))
+						new LanguageModelTextPart(`✅ PDB session terminated`)
 					]);
 				default:
-					return new ExtendedLanguageModelToolResult([
-						new LanguageModelTextPart(JSON.stringify({
-							status: 'error',
-							error: `Unknown action: ${action}`
-						}, null, 2))
-					]);
+					return this.errorResult(`Unknown action: ${action}`);
 			}
 
-			// Send command to JDB and wait for response
-			// Use longer timeout for run/continue as they wait for breakpoint
-			const timeout = (action === 'run' || action === 'continue') ? 30000 : 5000;
-			const result = await sendJdbCommand(session.sessionId, jdbCommand, timeout);
+			// Send command to PDB and wait for response
+			// Use longer timeout for continue as it waits for breakpoint
+			const timeout = (action === 'continue' || action === 'until') ? 30000 : 5000;
+			const result = await sendPdbCommand(session.sessionId, pdbCommand, timeout);
 
-			// Parse output for LLM-friendly response
+			// Parse output
 			const output = result.output || '';
+			const parsed = parsePdbOutput(output);
 			let statusMessage: string;
 
 			// Helper to get source code for context
 			const getSourceCode = async (): Promise<string> => {
-				const listResult = await sendJdbCommand(session.sessionId, 'list', 2000);
-				
-				// Parse source listing - JDB shows ~10 lines around current position with => marker
-				// Format: "linenum    code" or "linenum =>  code" for current line
-				// Note: JDB may append "Local variables:" section at the end - we need to strip that
+				const listResult = await sendPdbCommand(session.sessionId, 'l', 2000);
 				const listOutput = listResult.output || '';
-				if (listOutput && 
-				    !listOutput.includes('not available') && 
-				    !listOutput.includes('Source file not found') &&
-				    !listOutput.includes('not found')) {
-					// Truncate at "Local variables:" or "Method arguments:" if present
-					let sourceOnly = listOutput;
-					const localVarsIdx = listOutput.indexOf('Local variables:');
-					const methodArgsIdx = listOutput.indexOf('Method arguments:');
-					const cutoffIdx = Math.min(
-						localVarsIdx >= 0 ? localVarsIdx : Infinity,
-						methodArgsIdx >= 0 ? methodArgsIdx : Infinity
-					);
-					if (cutoffIdx < Infinity) {
-						sourceOnly = listOutput.slice(0, cutoffIdx);
-					}
-					
-					const lines = sourceOnly.split('\n')
-						.filter(l => l.trim() && !l.includes('main['))
-						// Keep lines that look like source (start with line number)
-						// but filter out JDB prompt lines that end with just ">"
-						.filter(l => !l.match(/^\s*>\s*$/));
-					return lines.join('\n');
+				if (listOutput && !listOutput.includes('Error')) {
+					// Clean up PDB prompt from source listing
+					return listOutput
+						.split('\n')
+						.filter(l => !l.match(/^\(Pdb\+*\)\s*$/) && l.trim())
+						.join('\n');
 				}
 				return '';
 			};
 
-			if (action === 'continue' || action === 'run') {
-				if (output.includes('Breakpoint hit')) {
-					// Extract breakpoint location
-					const match = output.match(/Breakpoint hit:.*?"thread=([^"]+)".*?(\S+)\(\),\s*line=(\d+)/);
-					
-					// Auto-fetch source code
+			if (action === 'continue' || action === 'until') {
+				if (output.includes('Breakpoint') || parsed.isAtBreakpoint) {
 					const source = await getSourceCode();
-					
-					if (match) {
-						const [, thread, method, line] = match;
-						statusMessage = `🎯 BREAKPOINT HIT!\n\n` +
-							`Location: ${method}() at line ${line}\n` +
-							`Thread: ${thread}\n`;
-					} else {
-						statusMessage = `🎯 BREAKPOINT HIT!\n\n${output.trim()}\n`;
+					const location = parsed.currentFile
+						? `${parsed.currentFile}:${parsed.currentLine} in ${parsed.currentFunction || '<module>'}`
+						: 'unknown location';
+
+					statusMessage = `🎯 BREAKPOINT HIT!\n\n` +
+						`Location: ${location}\n`;
+
+					if (parsed.sourceLine) {
+						statusMessage += `Current line: ${parsed.sourceLine}\n`;
 					}
-					
-					// Add source code
+
 					if (source) {
 						statusMessage += `\n📄 SOURCE CODE:\n${source}\n`;
 					}
-					
+
 					statusMessage += `\nNext steps:\n` +
 						`• debug_control({action: "step_over"}) - execute next line\n` +
-						`• debug_control({action: "step_into"}) - step into method call\n` +
+						`• debug_control({action: "step_into"}) - step into function\n` +
 						`• debug_control({action: "continue"}) - run to next breakpoint\n` +
 						`• debug_inspect({action: "locals"}) - see local variables\n` +
 						`• debug_inspect({action: "eval", expression: "expr"}) - evaluate expression`;
-						
-				} else if (output.includes('The application exited')) {
-					statusMessage = `⚠️ APPLICATION EXITED - No breakpoint was hit\n\n` +
-						`The test ran to completion without hitting any breakpoints.\n` +
+
+				} else if (output.includes('The program finished') || output.includes('--Return--')) {
+					statusMessage = `⚠️ PROGRAM FINISHED - No breakpoint was hit\n\n` +
+						`The program ran to completion.\n` +
 						`Possible reasons:\n` +
-						`1. Breakpoint location is not executed by this test\n` +
-						`2. Class name or method name was incorrect\n` +
-						`3. The test completes before reaching the breakpoint\n\n` +
-						`Try setting a breakpoint earlier in the call chain or on the test method itself.`;
-				} else if (output.includes('Set deferred breakpoint')) {
-					statusMessage = `▶️ RUNNING - Deferred breakpoints now active\n\n` +
-						`JDB output: ${output.trim()}\n\n` +
-						`Waiting for breakpoint to hit...`;
+						`1. Breakpoint location is not executed by this program\n` +
+						`2. File or line number was incorrect\n\n` +
+						`Output:\n${output}`;
+				} else if (parsed.isException) {
+					const source = await getSourceCode();
+					statusMessage = `⚠️ EXCEPTION RAISED!\n\n` +
+						`Type: ${parsed.exceptionType || 'Unknown'}\n` +
+						`Message: ${parsed.exceptionMessage || 'No message'}\n`;
+
+					if (parsed.currentFile) {
+						statusMessage += `Location: ${parsed.currentFile}:${parsed.currentLine}\n`;
+					}
+
+					if (source) {
+						statusMessage += `\n📄 SOURCE CODE:\n${source}\n`;
+					}
+
+					statusMessage += `\nSession paused at exception. You can:\n` +
+						`• debug_inspect({action: "locals"}) - see local variables\n` +
+						`• debug_inspect({action: "stack"}) - view call stack`;
 				} else {
-					statusMessage = `▶️ EXECUTION ${action.toUpperCase()}ED\n\n${output.trim() || 'No output'}`;
+					statusMessage = `▶️ EXECUTION ${action.toUpperCase()}D\n\n${output.trim() || 'No output'}`;
 				}
+
 			} else if (action === 'step_into' || action === 'step_over' || action === 'step_out') {
-				// Extract current location after step
-				const match = output.match(/Step completed:.*?(\S+)\(\),\s*line=(\d+)/);
-				
-				// Auto-fetch source code after stepping
 				const source = await getSourceCode();
-				
-				if (match) {
-					const [, method, line] = match;
-					statusMessage = `👣 STEPPED to ${method}() line ${line}\n`;
-				} else {
-					statusMessage = `👣 STEP ${action.replace('_', ' ').toUpperCase()}\n\n${output.trim() || 'Step completed'}\n`;
+				const location = parsed.currentFile
+					? `${parsed.currentFile}:${parsed.currentLine} in ${parsed.currentFunction || '<module>'}`
+					: 'stepped';
+
+				statusMessage = `👣 STEPPED to ${location}\n`;
+
+				if (parsed.sourceLine) {
+					statusMessage += `Current line: ${parsed.sourceLine}\n`;
 				}
-				
-				// Add source code
+
 				if (source) {
 					statusMessage += `\n📄 SOURCE CODE:\n${source}\n`;
 				}
-				
+
 				statusMessage += `\nNext steps:\n` +
 					`• debug_control({action: "step_over"}) - execute next line\n` +
-					`• debug_control({action: "step_into"}) - step into method call\n` +
+					`• debug_control({action: "step_into"}) - step into function\n` +
 					`• debug_control({action: "continue"}) - run to next breakpoint\n` +
 					`• debug_inspect({action: "locals"}) - see local variables\n` +
 					`• debug_inspect({action: "eval", expression: "expr"}) - evaluate expression`;
+
+			} else if (action === 'jump') {
+				statusMessage = `⏭️ JUMPED to line ${lineno}\n\n${output.trim() || 'Jump completed'}`;
+			} else if (action === 'restart') {
+				statusMessage = `🔄 PROGRAM RESTARTED\n\n${output.trim() || 'Restart completed'}`;
 			} else {
 				statusMessage = `✅ ${action.toUpperCase()} completed\n\n${output.trim() || 'No output'}`;
 			}
@@ -203,23 +194,27 @@ class DebugControlTool implements ICopilotTool<IDebugControlParams> {
 			console.error('[DebugControlTool] Error:', errorMessage);
 
 			return new ExtendedLanguageModelToolResult([
-				new LanguageModelTextPart(JSON.stringify({
-					status: 'error',
-					error: `Failed to execute ${action}: ${errorMessage}`
-				}, null, 2))
+				new LanguageModelTextPart(`❌ ERROR: Failed to execute ${action}: ${errorMessage}`)
 			]);
 		}
 	}
 
+	private errorResult(message: string) {
+		return new ExtendedLanguageModelToolResult([
+			new LanguageModelTextPart(`❌ ERROR: ${message}`)
+		]);
+	}
+
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IDebugControlParams>, _token: vscode.CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		const actionLabels: Record<string, string> = {
-			'run': 'Running program',
 			'continue': 'Continuing execution',
 			'step_into': 'Stepping into',
 			'step_over': 'Stepping over',
-			'step_out': 'Stepping out',
-			'pause': 'Pausing execution',
-			'terminate': 'Terminating debug session'
+			'step_out': 'Stepping out (return)',
+			'until': `Running until line ${options.input.lineno}`,
+			'jump': `Jumping to line ${options.input.lineno}`,
+			'restart': 'Restarting program',
+			'quit': 'Quitting debug session'
 		};
 		return {
 			invocationMessage: actionLabels[options.input.action] || `Debug: ${options.input.action}`,

@@ -21,12 +21,14 @@ import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegi
 export interface IDebugSubagentParams {
 	/** Specific question about runtime behavior to answer */
 	question: string;
-	/** File path to focus on (optional - helps target breakpoints) */
+	/** Python file path to focus on (optional - helps target breakpoints) */
 	file?: string;
-	/** Test to run to reproduce the issue (optional) */
-	test?: string;
+	/** Python script or module to run (e.g., "test_example.py" or "-m pytest test_example.py::test_func") */
+	target?: string;
 	/** Specific line number to set breakpoint (optional) */
 	line?: number;
+	/** Function name to break on (optional - alternative to line) */
+	function?: string;
 	/** Variables/expressions to inspect at the breakpoint (optional) */
 	variables?: string[];
 	/** Your hypothesis about what's happening (optional - helps guide investigation) */
@@ -43,7 +45,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 	) { }
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugSubagentParams>, token: vscode.CancellationToken) {
-		const { question, file, test, line, variables, context } = options.input;
+		const { question, file, target, line, function: funcName, variables, context } = options.input;
 		
 		// Build a structured debug instruction from the input
 		let debugInstruction = `Debug Question: ${question}`;
@@ -53,8 +55,11 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		if (line) {
 			debugInstruction += `\nLine: ${line}`;
 		}
-		if (test) {
-			debugInstruction += `\nTest to run: ${test}`;
+		if (funcName) {
+			debugInstruction += `\nFunction: ${funcName}`;
+		}
+		if (target) {
+			debugInstruction += `\nTarget to run: ${target}`;
 		}
 		if (variables && variables.length > 0) {
 			debugInstruction += `\nVariables to inspect: ${variables.join(', ')}`;
@@ -68,8 +73,9 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		console.log('[DebugSubagentTool] ========================================');
 		console.log('[DebugSubagentTool] Question:', question);
 		console.log('[DebugSubagentTool] File:', file);
-		console.log('[DebugSubagentTool] Test:', test);
+		console.log('[DebugSubagentTool] Target:', target);
 		console.log('[DebugSubagentTool] Line:', line);
+		console.log('[DebugSubagentTool] Function:', funcName);
 		console.log('[DebugSubagentTool] Variables:', variables);
 
 		// Define the tools available to the debug subagent
@@ -128,8 +134,9 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		const toolMetadata = {
 			question: question,
 			file: file,
-			test: test,
+			target: target,
 			line: line,
+			function: funcName,
 			variables: variables,
 			context: context,
 			toolsUsed: Array.from(allowedTools)

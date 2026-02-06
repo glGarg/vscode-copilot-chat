@@ -8,64 +8,111 @@ import { ToolName } from '../../common/toolNames';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../../common/toolsRegistry';
 import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { LanguageModelTextPart, ExtendedLanguageModelToolResult } from '../../../../vscodeTypes';
-import { getActiveJdbSession, sendJdbCommand } from './jdbSession';
+import { getActivePdbSession, sendPdbCommand } from './pdbSession';
 
 export interface IDebugInspectParams {
 	/** Action to perform */
-	action: 'locals' | 'eval' | 'stack' | 'this' | 'fields';
-	/** Expression to evaluate (for eval action) */
+	action: 'locals' | 'globals' | 'eval' | 'pretty_print' | 'stack' | 'args' | 'display' | 'undisplay' | 'interact' | 'source';
+	/** Expression to evaluate (for eval, pretty_print, display actions) */
 	expression?: string;
-	/** Object ID to inspect fields of */
-	objectId?: string;
+	/** Display number to remove (for undisplay action) */
+	displayNumber?: number;
+	/** Number of context lines for source (default: 11) */
+	contextLines?: number;
 }
 
 class DebugInspectTool implements ICopilotTool<IDebugInspectParams> {
 	public static readonly toolName = ToolName.DebugInspect;
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugInspectParams>, _token: vscode.CancellationToken) {
-		const { action, expression, objectId } = options.input;
+		const { action, expression, displayNumber, contextLines } = options.input;
 
-		console.log('[DebugInspectTool] Action:', action, { expression, objectId });
+		console.log('[DebugInspectTool] Action:', action, { expression, displayNumber, contextLines });
 
-		// Get active JDB session
-		const session = getActiveJdbSession();
+		// Get active PDB session
+		const session = getActivePdbSession();
 		if (!session) {
 			return this.errorResult(
-				'No active JDB session.\n\n' +
+				'No active PDB session.\n\n' +
 				'Start a debug session first:\n' +
-				'1. Run test with debug agent in background\n' +
-				'2. Call debug_start({mode: "attach", port: 5005})'
+				'debug_start_session({target: "script.py", initialBreakpoints: [...]})'
 			);
 		}
 
 		try {
-			let jdbCommand: string;
+			let pdbCommand: string;
 
 			switch (action) {
 				case 'locals':
-					jdbCommand = 'locals';
+					// Use p locals() to get a dict of local variables
+					pdbCommand = 'p locals()';
+					break;
+				case 'globals':
+					// Use p globals() to get global variables (often large!)
+					pdbCommand = 'p {k:v for k,v in globals().items() if not k.startswith("__")}';
 					break;
 				case 'eval':
 					if (!expression) {
 						return this.errorResult('expression is required for eval action');
 					}
-					jdbCommand = `print ${expression}`;
+					pdbCommand = `p ${expression}`;
+					break;
+				case 'pretty_print':
+					if (!expression) {
+						return this.errorResult('expression is required for pretty_print action');
+					}
+					pdbCommand = `pp ${expression}`;
 					break;
 				case 'stack':
-					jdbCommand = 'where';
+					pdbCommand = 'w';  // where - print stack trace
 					break;
-				case 'this':
-					jdbCommand = 'print this';
+				case 'args':
+					pdbCommand = 'a';  // args - print arguments of current function
 					break;
-				case 'fields':
-					jdbCommand = objectId ? `dump ${objectId}` : 'dump this';
+				case 'display':
+					if (!expression) {
+						// Without expression, list current displays
+						pdbCommand = 'display';
+					} else {
+						// Add expression to display list
+						pdbCommand = `display ${expression}`;
+					}
+					break;
+				case 'undisplay':
+					if (displayNumber !== undefined) {
+						pdbCommand = `undisplay ${displayNumber}`;
+					} else {
+						// Clear all displays
+						pdbCommand = 'undisplay';
+					}
+					break;
+				case 'interact':
+					// Start interactive Python interpreter at current frame
+					// Note: This is tricky in non-interactive mode, provide guidance
+					return new ExtendedLanguageModelToolResult([
+						new LanguageModelTextPart(
+							`ℹ️ INTERACT MODE\n\n` +
+							`The 'interact' command starts an interactive Python interpreter at the current frame.\n` +
+							`This is best used in a real terminal session.\n\n` +
+							`Instead, you can use:\n` +
+							`• debug_inspect({action: "eval", expression: "your_code"}) - evaluate any Python expression\n` +
+							`• debug_inspect({action: "locals"}) - see all local variables\n` +
+							`• debug_inspect({action: "pretty_print", expression: "obj"}) - pretty print an object`
+						)
+					]);
+				case 'source':
+					// List source code around current line
+					const lines = contextLines || 11;
+					pdbCommand = `l ${Math.floor(lines / 2)}`;  // l shows lines around current
+					// Actually, PDB 'l' without args shows 11 lines around current, 'l .' re-lists
+					pdbCommand = 'l';
 					break;
 				default:
 					return this.errorResult(`Unknown action: ${action}`);
 			}
 
-			// Send command to JDB
-			const result = await sendJdbCommand(session.sessionId, jdbCommand);
+			// Send command to PDB
+			const result = await sendPdbCommand(session.sessionId, pdbCommand);
 
 			// Parse output for LLM-friendly response
 			const output = result.output || '';
@@ -73,48 +120,68 @@ class DebugInspectTool implements ICopilotTool<IDebugInspectParams> {
 
 			switch (action) {
 				case 'locals': {
-					if (output.includes('No local variables')) {
+					// Clean up and format locals output
+					const cleanOutput = this.cleanPdbOutput(output);
+					if (cleanOutput.includes('{}') || cleanOutput.trim() === '{}') {
 						statusMessage = `📋 LOCAL VARIABLES: None\n\n` +
-							`No local variables at this point in execution.\n` +
-							`Try: debug_inspect({action: "this"}) to see instance fields, or\n` +
+							`No local variables at this point.\n` +
+							`Try: debug_inspect({action: "args"}) to see function arguments, or\n` +
 							`     debug_control({action: "step_over"}) to advance and check again.`;
 					} else {
-						// Parse variable list for cleaner display
-						const lines = output.split('\n').filter(l => l.trim() && !l.includes('main['));
-						statusMessage = `📋 LOCAL VARIABLES:\n\n${lines.join('\n') || 'None found'}`;
+						statusMessage = `📋 LOCAL VARIABLES:\n\n${cleanOutput}`;
 					}
+					break;
+				}
+				case 'globals': {
+					const cleanOutput = this.cleanPdbOutput(output);
+					statusMessage = `🌍 GLOBAL VARIABLES (filtered):\n\n${cleanOutput}`;
 					break;
 				}
 				case 'eval': {
-					// Clean up the print output
-					const cleanOutput = output.replace(/\s*main\[\d+\]\s*$/, '').trim();
-					const exprName = expression || 'expression';
-					if (cleanOutput.includes(' = ')) {
-						statusMessage = `🔍 EVALUATED: ${cleanOutput}`;
-					} else if (cleanOutput.includes('null')) {
-						statusMessage = `🔍 ${exprName} = null`;
-					} else {
-						statusMessage = `🔍 ${exprName} = ${cleanOutput}`;
-					}
+					const cleanOutput = this.cleanPdbOutput(output);
+					statusMessage = `🔍 ${expression} = ${cleanOutput}`;
+					break;
+				}
+				case 'pretty_print': {
+					const cleanOutput = this.cleanPdbOutput(output);
+					statusMessage = `🔍 ${expression}:\n\n${cleanOutput}`;
 					break;
 				}
 				case 'stack': {
-					const lines = output.split('\n').filter(l => l.trim() && !l.includes('main['));
+					const cleanOutput = this.cleanPdbOutput(output);
+					const lines = cleanOutput.split('\n').filter(l => l.trim());
 					statusMessage = `📚 CALL STACK:\n\n${lines.map((l, i) => `${i + 1}. ${l.trim()}`).join('\n') || 'Empty stack'}`;
 					break;
 				}
-				case 'this': {
-					const cleanOutput = output.replace(/\s*main\[\d+\]\s*$/, '').trim();
-					statusMessage = `📦 THIS OBJECT:\n\n${cleanOutput || 'Not available (static context?)'}`;
+				case 'args': {
+					const cleanOutput = this.cleanPdbOutput(output);
+					if (!cleanOutput || cleanOutput.trim() === '') {
+						statusMessage = `📋 FUNCTION ARGUMENTS: None (not in a function or no arguments)`;
+					} else {
+						statusMessage = `📋 FUNCTION ARGUMENTS:\n\n${cleanOutput}`;
+					}
 					break;
 				}
-				case 'fields': {
-					const cleanOutput = output.replace(/\s*main\[\d+\]\s*$/, '').trim();
-					statusMessage = `📦 OBJECT FIELDS:\n\n${cleanOutput || 'No fields found'}`;
+				case 'display': {
+					const cleanOutput = this.cleanPdbOutput(output);
+					if (expression) {
+						statusMessage = `✅ Now displaying: ${expression}\n\n${cleanOutput}`;
+					} else {
+						statusMessage = `📋 CURRENT DISPLAYS:\n\n${cleanOutput || 'No expressions being displayed'}`;
+					}
+					break;
+				}
+				case 'undisplay': {
+					statusMessage = `✅ Display${displayNumber !== undefined ? ` #${displayNumber}` : 's'} removed`;
+					break;
+				}
+				case 'source': {
+					const cleanOutput = this.cleanPdbOutput(output);
+					statusMessage = `📄 SOURCE CODE:\n\n${cleanOutput}`;
 					break;
 				}
 				default:
-					statusMessage = output.trim();
+					statusMessage = this.cleanPdbOutput(output);
 			}
 
 			return new ExtendedLanguageModelToolResult([
@@ -128,6 +195,15 @@ class DebugInspectTool implements ICopilotTool<IDebugInspectParams> {
 		}
 	}
 
+	private cleanPdbOutput(output: string): string {
+		// Remove PDB prompt and clean up output
+		return output
+			.split('\n')
+			.filter(l => !l.match(/^\(Pdb\+*\)\s*$/))
+			.join('\n')
+			.trim();
+	}
+
 	private errorResult(message: string) {
 		return new ExtendedLanguageModelToolResult([
 			new LanguageModelTextPart(`❌ ERROR: ${message}`)
@@ -137,10 +213,15 @@ class DebugInspectTool implements ICopilotTool<IDebugInspectParams> {
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IDebugInspectParams>, _token: vscode.CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		const actionLabels: Record<string, string> = {
 			'locals': 'Inspecting local variables',
+			'globals': 'Inspecting global variables',
 			'eval': `Evaluating: ${options.input.expression}`,
+			'pretty_print': `Pretty printing: ${options.input.expression}`,
 			'stack': 'Viewing stack trace',
-			'this': 'Inspecting "this" object',
-			'fields': 'Inspecting object fields'
+			'args': 'Inspecting function arguments',
+			'display': options.input.expression ? `Adding display: ${options.input.expression}` : 'Listing displays',
+			'undisplay': 'Removing display',
+			'interact': 'Starting interactive mode',
+			'source': 'Viewing source code'
 		};
 		return {
 			invocationMessage: actionLabels[options.input.action] || `Inspect: ${options.input.action}`,

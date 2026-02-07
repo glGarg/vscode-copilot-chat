@@ -56,18 +56,25 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					**Exception Origin**: "What causes the TypeError?"<br />
 					→ Answer with the problematic value and why it's the wrong type<br />
 					<br />
-					## ⚠️ WORKFLOW: Use debug_start_session (Recommended)<br />
+					## ⚠️ WORKFLOW: Use debug_start_session (Two-Stage Approach)<br />
 					<br />
-					The `debug_start_session` tool handles everything atomically - start the script/test, set breakpoints, and continue to first hit.<br />
+					The `debug_start_session` tool uses a **two-stage breakpoint approach** for reliability:<br />
+					<br />
+					1. **Stage 1**: Automatically sets a breakpoint at the test function entry (guaranteed to hit)<br />
+					2. **Stage 2**: Your `initialBreakpoints` are set, then execution continues to your target<br />
+					<br />
+					This prevents "script finished without hitting breakpoint" errors by ensuring we always pause before completion.<br />
+					<br />
+					**⚠️ IMPORTANT: Always use ABSOLUTE paths** (starting with `/`) for all file paths!<br />
 					<br />
 					**For PYTEST tests** - use `testFile` and optionally `testName`:<br />
 					```<br />
 					debug_start_session({'{'}
-					  testFile: "tests/test_example.py",     // Test file to run
-					  testName: "test_function",             // Optional: specific test
+					  testFile: "/testbed/tests/test_example.py",  // ABSOLUTE path
+					  testName: "test_function",                   // Specific test (enables two-stage)
 					  initialBreakpoints: [
-					    {'{'}file: "src/module.py", line: 42{'}'},
-					    {'{'}file: "src/module.py", function: "process_data"{'}'}
+					    {'{'}file: "/testbed/src/module.py", line: 42{'}'},
+					    {'{'}file: "/testbed/src/module.py", function: "process_data"{'}'}
 					  ]
 					{'}'})<br />
 					```<br />
@@ -75,10 +82,10 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					**For regular SCRIPTS** - use `script` and optionally `args`:<br />
 					```<br />
 					debug_start_session({'{'}
-					  script: "main.py",                     // Script to debug
-					  args: ["--input", "data.txt"],         // Optional: script arguments
+					  script: "/testbed/repro.py",                // ABSOLUTE path to script
+					  args: ["--input", "data.txt"],              // Optional: script arguments
 					  initialBreakpoints: [
-					    {'{'}file: "main.py", line: 50{'}'}
+					    {'{'}file: "/testbed/src/module.py", line: 50{'}'}
 					  ]
 					{'}'})<br />
 					```<br />
@@ -94,7 +101,7 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					<br />
 					**Step 3: Continue exploring** (optional):<br />
 					```<br />
-					debug_breakpoint({'{'}action: "set", file: "other_module.py", line: 100{'}'})<br />
+					debug_breakpoint({'{'}action: "set", file: "/testbed/src/other_module.py", line: 100{'}'})<br />
 					debug_control({'{'}action: "continue"{'}'})<br />
 					debug_control({'{'}action: "step_over"{'}'})<br />
 					```<br />
@@ -114,7 +121,7 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					<br />
 					## PDB-Specific Features<br />
 					<br />
-					- **Conditional breakpoints**: debug_breakpoint({'{'}action: "set", file: "x.py", line: 10, condition: "i &gt; 5"{'}'})<br />
+					- **Conditional breakpoints**: debug_breakpoint({'{'}action: "set", file: "/testbed/x.py", line: 10, condition: "i &gt; 5"{'}'})<br />
 					- **Jump to line**: debug_control({'{'}action: "jump", lineno: 50{'}'}) - skip code by jumping<br />
 					- **Until line**: debug_control({'{'}action: "until", lineno: 100{'}'}) - run until reaching line<br />
 					- **Pretty print**: debug_inspect({'{'}action: "pretty_print", expression: "large_dict"{'}'})<br />

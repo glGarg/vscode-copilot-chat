@@ -138,16 +138,52 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 			}
 			activeProcess = session.process;
 
-			// Set initial breakpoints
+			// ============================================================
+			// TWO-STAGE BREAKPOINT APPROACH
+			// Stage 1: Set a GUARANTEED entry breakpoint (always hits)
+			// Stage 2: Set user's breakpoints, then continue to target
+			// ============================================================
 			const breakpointResults: string[] = [];
+			let entryBpSet = false;
+
+			// Stage 1: Set entry breakpoint (GUARANTEED to hit)
+			if (isPytest && testName) {
+				// For pytest with specific test: set breakpoint at test function entry
+				// This ensures we pause BEFORE running to completion
+				const entryBp = await this.setTestFunctionBreakpoint(sessionId, testFile!, testName);
+				if (entryBp.success) {
+					entryBpSet = true;
+					breakpointResults.push(`✓ ${entryBp.desc} [test entry - guaranteed]`);
+					console.log('[DebugStartSessionTool] Stage 1: Entry breakpoint set at test function');
+				}
+			}
+			// For scripts: PDB already stops at first line, so no entry breakpoint needed
+
+			// Stage 2: Set user's requested breakpoints
 			for (const bp of initialBreakpoints) {
 				const bpResult = await this.setBreakpoint(sessionId, bp);
 				breakpointResults.push(bpResult);
 			}
 
-			// If breakpoints were set, continue to first breakpoint
+			// Continue and handle two-stage stopping
 			let result: DebugSessionResult;
-			if (initialBreakpoints.length > 0) {
+			
+			if (entryBpSet && initialBreakpoints.length > 0) {
+				// TWO-STAGE: First stop at test entry, then continue to actual breakpoint
+				console.log('[DebugStartSessionTool] Two-stage approach: continuing to test entry first...');
+				const stage1Result = await this.continueToBreakpoint(sessionId, 30000);
+				
+				if (stage1Result.status === 'breakpoint_hit') {
+					// We hit the test function entry - now continue to actual target breakpoint
+					console.log('[DebugStartSessionTool] Stage 1 complete: hit test entry, continuing to target breakpoint...');
+					result = await this.continueToBreakpoint(sessionId, timeout * 1000);
+				} else {
+					// Test completed or failed before hitting entry point (shouldn't happen)
+					console.log('[DebugStartSessionTool] Stage 1 unexpected:', stage1Result.status);
+					result = stage1Result;
+				}
+			} else if (initialBreakpoints.length > 0) {
+				// Single stage: just continue to user's breakpoints
 				result = await this.continueToBreakpoint(sessionId, timeout * 1000);
 			} else {
 				// No breakpoints, just return ready state
@@ -211,6 +247,44 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 		} else {
 			return `? ${desc}: ${output.split('\n')[0]}`;
 		}
+	}
+
+	/**
+	 * Set a breakpoint at the test function entry point.
+	 * This is the "guaranteed" breakpoint in the two-stage approach.
+	 * 
+	 * For pytest, testName can be:
+	 * - "test_function" - simple function
+	 * - "TestClass::test_method" - method in test class
+	 */
+	private async setTestFunctionBreakpoint(
+		sessionId: string,
+		testFile: string,
+		testName: string
+	): Promise<{ success: boolean; desc: string }> {
+		// Parse testName to extract function/method name
+		// Format can be "test_func" or "TestClass::test_method"
+		let functionName = testName;
+		if (testName.includes('::')) {
+			// TestClass::test_method -> extract test_method
+			functionName = testName.split('::').pop() || testName;
+		}
+
+		// Set breakpoint on the test function using function breakpoint
+		// PDB format: b filename:function_name
+		const cmd = `b ${testFile}:${functionName}`;
+		const desc = `${testFile}:${functionName}()`;
+
+		console.log(`[DebugStartSessionTool] Setting entry breakpoint: ${cmd}`);
+		const result = await sendPdbCommand(sessionId, cmd, 2000);
+		const output = result.output || '';
+
+		const success = output.includes('Breakpoint') && output.match(/Breakpoint \d+ at/);
+		if (!success) {
+			console.log(`[DebugStartSessionTool] Failed to set entry breakpoint: ${output}`);
+		}
+
+		return { success: !!success, desc };
 	}
 
 	private async continueToBreakpoint(sessionId: string, timeoutMs: number): Promise<DebugSessionResult> {

@@ -235,7 +235,13 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 
 	public override async getAvailableTools(): Promise<vscode.LanguageModelToolInformation[]> {
 		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.request);
-		
+
+		// Safety check - if allTools is undefined/null, return empty array
+		if (!allTools) {
+			console.error('[AgentIntent] getAgentTools returned undefined/null');
+			return [];
+		}
+
 		// Only provide essential tools for bug fixing - smaller set makes debug_subagent more prominent
 		const allowedTools = new Set([
 			// The debug subagent - MUST be run
@@ -244,7 +250,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			ToolName.ReadFile,
 			// ToolName.FindFiles,
 			// ToolName.FindTextInFiles,
-			ToolName.ListDir,
+			ToolName.ListDirectory,
 			// Editing - ApplyPatch is primary for GPT-5
 			ToolName.ApplyPatch,
 			// ToolName.ReplaceString,
@@ -255,7 +261,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			// Planning
 			ToolName.CoreManageTodoList,
 		]);
-		
+
 		return allTools.filter(tool => allowedTools.has(tool.name as ToolName));
 	}
 

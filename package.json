@@ -200,7 +200,7 @@
 				"icon": "$(bug)",
 				"canBeReferencedInPrompt": true,
 				"userDescription": "Ask questions about Python runtime behavior using PDB debugger",
-				"modelDescription": "A Runtime Oracle that answers specific questions about Python program execution using PDB (Python Debugger).\n\nUse this tool to ask specific questions about runtime behavior:\n- Variable values: \"What is `data` at utils.py:330?\"\n- Reachability: \"Does execution reach line 450 during test X?\"\n- Condition evaluation: \"Why does `x != y` evaluate to true at line 335?\"\n- Exception causes: \"What causes the TypeError in test_module?\"\n- Comparison: \"Compare execution between passing test_a and failing test_b\"\n\nThe subagent will:\n1. Set breakpoints at specified locations\n2. Run the script or test with PDB\n3. Inspect variables and return factual answers\n\nCall this tool EARLY in your investigation (before writing fixes) to understand root causes.",
+				"modelDescription": "A Runtime Oracle that answers specific questions about Python program execution using PDB (Python Debugger).\n\nUse this tool to ask specific questions about runtime behavior:\n- Variable values: \"What is `data` at utils.py:330?\"\n- Reachability: \"Does execution reach line 450 during test X?\"\n- Condition evaluation: \"Why does `x != y` evaluate to true at line 335?\"\n- Exception causes: \"What causes the TypeError in test_module?\"\n\n⚠️ IMPORTANT: Use testFile for pytest tests, script for regular Python scripts.\n\nCall this tool EARLY in your investigation (before writing fixes) to understand root causes.",
 				"tags": [
 					"debugging",
 					"python"
@@ -210,19 +210,32 @@
 					"properties": {
 						"question": {
 							"type": "string",
-							"description": "Specific question about runtime behavior. Examples: 'What is `data` at line 330?', 'Why does the condition at line 335 evaluate to true?', 'What causes the TypeError in test X?'"
+							"description": "Specific question about runtime behavior. Examples: 'What is `data` at line 330?', 'What causes the TypeError?'"
+						},
+						"testFile": {
+							"type": "string",
+							"description": "For PYTEST: Test file path (e.g., 'tests/test_example.py'). Use this for debugging tests."
+						},
+						"testName": {
+							"type": "string",
+							"description": "For PYTEST: Specific test name (e.g., 'test_func' or 'TestClass::test_method'). Optional."
+						},
+						"script": {
+							"type": "string",
+							"description": "For SCRIPTS: Python script path (e.g., 'main.py'). Use this for debugging regular scripts."
+						},
+						"scriptArgs": {
+							"type": "array",
+							"items": { "type": "string" },
+							"description": "For SCRIPTS: Arguments to pass to the script. Optional."
 						},
 						"file": {
 							"type": "string",
-							"description": "Python file path to focus on (helps target breakpoints). Optional."
-						},
-						"target": {
-							"type": "string",
-							"description": "Python script or module to run (e.g., 'test_example.py' or '-m pytest test_example.py::test_func'). Optional."
+							"description": "File to set breakpoint in (e.g., 'src/utils.py'). Optional."
 						},
 						"line": {
 							"type": "number",
-							"description": "Specific line number to set breakpoint. Optional."
+							"description": "Line number for breakpoint. Optional."
 						},
 						"function": {
 							"type": "string",
@@ -231,11 +244,11 @@
 						"variables": {
 							"type": "array",
 							"items": { "type": "string" },
-							"description": "Variables or expressions to inspect at the breakpoint. Optional."
+							"description": "Variables to inspect at breakpoint. Optional."
 						},
 						"context": {
 							"type": "string",
-							"description": "Your hypothesis about what's happening (helps guide investigation). Optional."
+							"description": "Your hypothesis (helps guide investigation). Optional."
 						}
 					},
 					"required": [
@@ -249,22 +262,30 @@
 				"displayName": "Debug Start Session",
 				"icon": "$(debug-start)",
 				"canBeReferencedInPrompt": false,
-				"userDescription": "Start a complete Python debug session with initial breakpoints",
-				"modelDescription": "Start a complete Python debug session with PDB atomically. This tool handles everything in one call:\n1. Starts Python with PDB or runs pytest with --pdb\n2. Sets all initial breakpoints\n3. Continues execution until first breakpoint hit\n\nSupports multiple run modes:\n- Script: python -m pdb script.py\n- Module: python -m pdb -m module_name\n- Pytest: pytest --pdb test_file.py::test_func\n\nTo restart with different breakpoints, just call this tool again - it automatically cleans up the previous session.",
+				"userDescription": "Start a Python debug session with PDB or pytest --pdb",
+				"modelDescription": "Start a Python debug session. Use testFile for pytest tests, script for regular Python scripts.\n\nPytest mode: Runs 'pytest --pdb testFile::testName'\nScript mode: Runs 'python -m pdb script args...'\n\nTo restart, call again - previous session is automatically cleaned up.",
 				"tags": [
 					"debugging"
 				],
 				"inputSchema": {
 					"type": "object",
 					"properties": {
-						"target": {
+						"testFile": {
 							"type": "string",
-							"description": "Script, module, or pytest target to run (e.g., 'script.py', '-m module_name', or 'test_file.py::test_func')"
+							"description": "For PYTEST: Test file path (e.g., 'tests/test_example.py')"
+						},
+						"testName": {
+							"type": "string",
+							"description": "For PYTEST: Specific test (e.g., 'test_func'). Optional - runs all tests in file if omitted."
+						},
+						"script": {
+							"type": "string",
+							"description": "For SCRIPTS: Script path (e.g., 'main.py')"
 						},
 						"args": {
 							"type": "array",
 							"items": { "type": "string" },
-							"description": "Arguments to pass to the script"
+							"description": "For SCRIPTS: Arguments to pass to script"
 						},
 						"initialBreakpoints": {
 							"type": "array",
@@ -301,7 +322,7 @@
 							"description": "Timeout in seconds to wait for breakpoint hit (default: 60)"
 						}
 					},
-					"required": ["target"]
+					"required": []
 				}
 			},
 			{

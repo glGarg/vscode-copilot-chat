@@ -18,39 +18,50 @@ export interface IPdbSession {
 const sessions = new Map<string, IPdbSession>();
 
 /**
- * Start a new PDB session to debug a Python script or module.
- * 
- * @param sessionId Unique session identifier
- * @param target Script path or module spec (e.g., "script.py" or "-m pytest")
- * @param args Arguments to pass to the target
- * @param workingDir Working directory for the process
+ * Start a new PDB session to debug a Python script.
+ * For regular scripts, uses: python -m pdb script.py [args]
  */
 export async function startPdbSession(
 	sessionId: string,
-	target: string,
+	script: string,
 	args: string[] = [],
 	workingDir?: string
 ): Promise<{ success: boolean; output: string; error?: string }> {
 
-	// Build PDB command
-	// python -m pdb script.py [args]
-	// python -m pdb -m module [args]
-	const pythonArgs: string[] = ['-m', 'pdb'];
+	// Build PDB command: python -m pdb script.py [args]
+	const pythonArgs: string[] = ['-m', 'pdb', script, ...args];
 
-	if (target.startsWith('-m ')) {
-		// Module mode: python -m pdb -m module_name
-		pythonArgs.push('-m', target.slice(3).trim());
-	} else {
-		// Script mode: python -m pdb script.py
-		pythonArgs.push(target);
-	}
-
-	// Add any additional arguments
-	pythonArgs.push(...args);
-
-	console.log(`[PdbSession] Starting PDB: python ${pythonArgs.join(' ')}`);
+	console.log(`[PdbSession] Starting PDB (script mode): python ${pythonArgs.join(' ')}`);
 
 	return launchPdbProcess(sessionId, pythonArgs, workingDir);
+}
+
+/**
+ * Start a pytest session with PDB debugging.
+ * Uses: pytest --pdb -s testFile [testSelector]
+ */
+export async function startPytestPdbSession(
+	sessionId: string,
+	testFile: string,
+	testName?: string,
+	workingDir?: string
+): Promise<{ success: boolean; output: string; error?: string }> {
+
+	// Build pytest command with --pdb
+	// pytest --pdb -s tests/test_example.py::test_func
+	const testTarget = testName ? `${testFile}::${testName}` : testFile;
+	
+	const pytestArgs: string[] = [
+		'-m', 'pytest',
+		'--pdb',              // Drop into PDB on failure
+		'-s',                 // Don't capture stdout (allows PDB interaction)
+		'--tb=short',         // Short traceback format
+		testTarget
+	];
+
+	console.log(`[PdbSession] Starting pytest with PDB: python ${pytestArgs.join(' ')}`);
+
+	return launchPdbProcess(sessionId, pytestArgs, workingDir);
 }
 
 /**

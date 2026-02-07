@@ -33,84 +33,43 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 			<Tag name='debug_subagent_instructions'>
 				## Using debug_subagent for Bug Fixing<br />
 				<br />
-				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help you understand why tests fail. Use it to investigate bugs before making changes.<br />
+				You have access to `debug_subagent` - a debugging tool that can inspect runtime values and help you understand why tests fail.<br />
 				<br />
-				### Recommended Workflow:<br />
+				### ⚠️ CRITICAL: Parameter Format<br />
 				<br />
-				**Step 1: Understand the bug** (before making changes)<br />
-				```<br />
-				debug_subagent({'{'}question: "What exception occurs when running test_function?", target: "test_module.py::test_function"{'}'})<br />
-				```<br />
-				Be specific - include the actual test name rather than saying "the failing test".<br />
+				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
 				<br />
-				**Step 2: Investigate root cause**<br />
+				**For PYTEST tests:**<br />
 				```<br />
-				debug_subagent({'{'}question: "What is the value of [variable] at [location]?"{'}'})<br />
-				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "module.py", line: N{'}'})<br />
-				```<br />
-				<br />
-				**Step 3: Apply your fix**<br />
-				<br />
-				**Step 4: Verify the fix by running actual tests**<br />
-				```<br />
-				run_in_terminal: "pytest test_module.py::test_function -v"<br />
-				→ Parse output: "1 passed" or "1 failed"<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "What causes the TypeError?",<br />
+				{'  '}testFile: "tests/test_example.py",      // Test file to run<br />
+				{'  '}testName: "test_my_function",           // Optional: specific test<br />
+				{'  '}file: "src/utils.py",                   // Optional: breakpoint file<br />
+				{'  '}line: 42                                // Optional: breakpoint line<br />
+				{'}'})<br />
 				```<br />
 				<br />
-				### Validation Loop - CRITICAL<br />
-				<br />
-				After applying a fix, verify it worked by running actual tests. If tests still fail, iterate:<br />
-				<br />
+				**For regular SCRIPTS:**<br />
 				```<br />
-				while (tests still failing AND attempts {'<'} 3) {'{'}<br />
-				  1. Use debug_subagent to understand the current failure (NOT to verify if it passes)<br />
-				  2. Apply your fix based on the evidence<br />
-				  3. Run the actual test command (pytest) via run_in_terminal<br />
-				  4. Check the test output - did tests pass?<br />
-				     • If YES: Done! ✓<br />
-				     • If NO: Go back to step 1 with debug_subagent to understand the new failure<br />
-				{'}'}<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "What is x at line 50?",<br />
+				{'  '}script: "main.py",                      // Script to run<br />
+				{'  '}file: "main.py",                        // Breakpoint file<br />
+				{'  '}line: 50                                // Breakpoint line<br />
+				{'}'})<br />
 				```<br />
 				<br />
-				**Example with iteration:**<br />
-				```<br />
-				// First attempt:<br />
-				1. debug_subagent: "What causes TypeError in test_module.py::test_function?"<br />
-				   → "variable X is None at line 50"<br />
-				2. Apply fix: Add None check for X<br />
-				3. run_in_terminal: "pytest test_module.py::test_function -v"<br />
-				   → Output: "1 failed" ✗ Still failing!<br />
+				### Workflow<br />
 				<br />
-				// Second attempt - iterate:<br />
-				4. debug_subagent: "What causes the IndexError in test_module.py::test_function?"<br />
-				   → "List length is 5 but accessing index 10"<br />
-				5. Apply fix: Add bounds check<br />
-				6. run_in_terminal: "pytest test_module.py::test_function -v"<br />
-				   → Output: "1 passed" ✓ Success!<br />
-				```<br />
+				1. **Understand the bug** - Call debug_subagent with your question<br />
+				2. **Apply your fix** - Based on the debug info<br />
+				3. **Verify** - Run tests via `run_in_terminal: "pytest tests/test_file.py -v"`<br />
 				<br />
-				### ⚠️ CRITICAL: Verification Rules<br />
-				<br />
-				**NEVER use debug_subagent to verify if tests pass.**<br />
-				<br />
-				debug_subagent cannot reliably determine if tests pass because:<br />
-				- Tests may fail without throwing exceptions<br />
-				- Assertions may be caught/handled<br />
-				- Test frameworks report results differently<br />
-				<br />
-				**ALWAYS verify with actual test commands:**<br />
-				```<br />
-				run_in_terminal: "pytest test_module.py::test_function -v"<br />
-				→ Parse output: "X passed, Y failed"<br />
-				→ If Y=0: Test passes ✓<br />
-				```<br />
-				<br />
-				**Use debug_subagent ONLY to understand failures, never to verify passes.**<br />
-				<br />
-				### Tips:<br />
+				### Tips<br />
+				- Use `file` and `line` to set breakpoints at specific locations<br />
+				- Use `testName` to run a specific test instead of the whole file<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
-				- Use it to understand failures, but always verify with actual test commands<br />
-				- If a fix doesn't work, use debug_subagent to understand why<br />
 			</Tag>
 			</>}
 			<Tag name='personality'>

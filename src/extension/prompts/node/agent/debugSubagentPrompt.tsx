@@ -60,17 +60,30 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					<br />
 					The `debug_start_session` tool handles everything atomically - start the script/test, set breakpoints, and continue to first hit.<br />
 					<br />
-					**Step 1: Start debug session with initial breakpoints**:<br />
+					**For PYTEST tests** - use `testFile` and optionally `testName`:<br />
 					```<br />
 					debug_start_session({'{'}
-					  target: "test_example.py",  // or "-m pytest test_example.py::test_func"
+					  testFile: "tests/test_example.py",     // Test file to run
+					  testName: "test_function",             // Optional: specific test
 					  initialBreakpoints: [
-					    {'{'}file: "module.py", line: 42{'}'},
-					    {'{'}file: "module.py", function: "process_data"{'}'}
+					    {'{'}file: "src/module.py", line: 42{'}'},
+					    {'{'}file: "src/module.py", function: "process_data"{'}'}
 					  ]
 					{'}'})<br />
 					```<br />
-					This will start PDB, set all breakpoints, and run until first breakpoint hit.<br />
+					<br />
+					**For regular SCRIPTS** - use `script` and optionally `args`:<br />
+					```<br />
+					debug_start_session({'{'}
+					  script: "main.py",                     // Script to debug
+					  args: ["--input", "data.txt"],         // Optional: script arguments
+					  initialBreakpoints: [
+					    {'{'}file: "main.py", line: 50{'}'}
+					  ]
+					{'}'})<br />
+					```<br />
+					<br />
+					This will start PDB/pytest, set all breakpoints, and run until first breakpoint hit.<br />
 					<br />
 					**Step 2: Inspect** when breakpoint hits:<br />
 					```<br />
@@ -92,7 +105,7 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					<br />
 					## Tools Available<br />
 					<br />
-					- **debug_start_session**: Start debug session atomically (target, args, initialBreakpoints)<br />
+					- **debug_start_session**: Start debug session (testFile/testName for pytest, script/args for scripts, initialBreakpoints)<br />
 					- **debug_inspect**: Inspect state (action: locals, globals, eval, pretty_print, stack, args, source)<br />
 					- **debug_breakpoint**: Manage breakpoints (action: set, remove, list, enable, disable, condition)<br />
 					- **debug_control**: Control execution (action: continue, step_into, step_over, step_out, until, jump, quit)<br />

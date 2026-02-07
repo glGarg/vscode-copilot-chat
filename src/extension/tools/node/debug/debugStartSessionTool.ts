@@ -9,7 +9,7 @@ import { ToolName } from '../../common/toolNames';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../../common/toolsRegistry';
 import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { LanguageModelTextPart, ExtendedLanguageModelToolResult } from '../../../../vscodeTypes';
-import { startPdbSession, getActivePdbSession, sendPdbCommand, terminatePdbSession, parsePdbOutput } from './pdbSession';
+import { startPdbSession, startPytestPdbSession, getActivePdbSession, sendPdbCommand, terminatePdbSession, parsePdbOutput } from './pdbSession';
 
 export interface IBreakpointSpec {
 	/** Python file path (relative or absolute) */
@@ -23,10 +23,16 @@ export interface IBreakpointSpec {
 }
 
 export interface IDebugStartSessionParams {
-	/** Python script path OR module spec (e.g., "script.py" or "-m pytest test_file.py::test_func") */
-	target: string;
-	/** Arguments to pass to the target */
+	// === Target specification (use testFile OR script, not both) ===
+	/** For pytest: test file path (e.g., "tests/test_example.py") */
+	testFile?: string;
+	/** For pytest: specific test name (e.g., "test_func" or "TestClass::test_method") */
+	testName?: string;
+	/** For regular scripts: script path (e.g., "script.py") */
+	script?: string;
+	/** For regular scripts: arguments to pass */
 	args?: string[];
+	
 	/** Initial breakpoints to set before continuing execution */
 	initialBreakpoints?: IBreakpointSpec[];
 	/** Working directory (defaults to workspace root) */
@@ -56,14 +62,29 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugStartSessionParams>, _token: vscode.CancellationToken) {
 		const {
-			target,
+			testFile,
+			testName,
+			script,
 			args = [],
 			initialBreakpoints = [],
 			workingDir,
 			timeout = 60
 		} = options.input;
 
-		console.log('[DebugStartSessionTool] Starting debug session:', { target, args, initialBreakpoints, timeout });
+		const isPytest = !!testFile;
+		const isScript = !!script;
+		
+		if (!isPytest && !isScript) {
+			return this.errorResult(
+				'Must specify either testFile (for pytest) or script (for regular scripts).\n\n' +
+				'Examples:\n' +
+				'• Pytest: {testFile: "tests/test_example.py", testName: "test_func"}\n' +
+				'• Script: {script: "main.py", args: ["--verbose"]}'
+			);
+		}
+
+		const target = isPytest ? `${testFile}${testName ? '::' + testName : ''}` : script!;
+		console.log('[DebugStartSessionTool] Starting debug session:', { mode: isPytest ? 'pytest' : 'script', target, initialBreakpoints, timeout });
 
 		try {
 			// Clean up any existing session
@@ -80,20 +101,26 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 			const cwd = workingDir || process.cwd();
 			console.log('[DebugStartSessionTool] Working directory:', cwd);
 
-			// Start PDB session
+			// Start appropriate session type
 			const sessionId = `pdb-${Date.now()}`;
-			const startResult = await startPdbSession(sessionId, target, args, cwd);
+			let startResult;
+			
+			if (isPytest) {
+				startResult = await startPytestPdbSession(sessionId, testFile!, testName, cwd);
+			} else {
+				startResult = await startPdbSession(sessionId, script!, args, cwd);
+			}
 
 			if (!startResult.success) {
 				return this.errorResult(
-					`Failed to start PDB session.\n\n` +
+					`Failed to start ${isPytest ? 'pytest' : 'PDB'} session.\n\n` +
 					`Target: ${target}\n` +
 					`Error: ${startResult.error || 'Unknown error'}\n\n` +
 					`Output:\n${startResult.output || '(no output)'}\n\n` +
 					`Common causes:\n` +
-					`• Script or module not found\n` +
-					`• Python syntax error\n` +
-					`• Missing dependencies`
+					(isPytest 
+						? '• Test file not found\n• pytest not installed\n• Test syntax error'
+						: '• Script not found\n• Python syntax error\n• Missing dependencies')
 				);
 			}
 

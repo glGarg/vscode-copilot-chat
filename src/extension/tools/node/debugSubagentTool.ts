@@ -21,17 +21,29 @@ import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegi
 export interface IDebugSubagentParams {
 	/** Specific question about runtime behavior to answer */
 	question: string;
-	/** Python file path to focus on (optional - helps target breakpoints) */
+	
+	// === Target specification (use testFile OR script, not both) ===
+	/** For pytest: test file path (e.g., "tests/test_example.py") */
+	testFile?: string;
+	/** For pytest: specific test name (e.g., "test_func" or "TestClass::test_method") - optional */
+	testName?: string;
+	/** For regular scripts: script path (e.g., "script.py") */
+	script?: string;
+	/** For regular scripts: arguments to pass */
+	scriptArgs?: string[];
+	
+	// === Breakpoint specification ===
+	/** File to set breakpoint in (e.g., "src/utils.py") */
 	file?: string;
-	/** Python script or module to run (e.g., "test_example.py" or "-m pytest test_example.py::test_func") */
-	target?: string;
-	/** Specific line number to set breakpoint (optional) */
+	/** Line number for breakpoint */
 	line?: number;
-	/** Function name to break on (optional - alternative to line) */
+	/** Function name to break on (alternative to line) */
 	function?: string;
-	/** Variables/expressions to inspect at the breakpoint (optional) */
+	
+	// === Inspection ===
+	/** Variables/expressions to inspect at the breakpoint */
 	variables?: string[];
-	/** Your hypothesis about what's happening (optional - helps guide investigation) */
+	/** Your hypothesis about what's happening (helps guide investigation) */
 	context?: string;
 }
 
@@ -45,21 +57,36 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 	) { }
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugSubagentParams>, token: vscode.CancellationToken) {
-		const { question, file, target, line, function: funcName, variables, context } = options.input;
+		const { question, testFile, testName, script, scriptArgs, file, line, function: funcName, variables, context } = options.input;
 		
-		// Build a structured debug instruction from the input
-		let debugInstruction = `Debug Question: ${question}`;
+		// Determine mode and build debug instruction
+		const isPytest = !!testFile;
+		const isScript = !!script;
+		
+		let debugInstruction = `Debug Question: ${question}\n`;
+		
+		if (isPytest) {
+			debugInstruction += `\nMode: pytest`;
+			debugInstruction += `\nTest File: ${testFile}`;
+			if (testName) {
+				debugInstruction += `\nTest Name: ${testName}`;
+			}
+		} else if (isScript) {
+			debugInstruction += `\nMode: script`;
+			debugInstruction += `\nScript: ${script}`;
+			if (scriptArgs && scriptArgs.length > 0) {
+				debugInstruction += `\nScript Args: ${scriptArgs.join(' ')}`;
+			}
+		}
+		
 		if (file) {
-			debugInstruction += `\nFile: ${file}`;
+			debugInstruction += `\nBreakpoint File: ${file}`;
 		}
 		if (line) {
-			debugInstruction += `\nLine: ${line}`;
+			debugInstruction += `\nBreakpoint Line: ${line}`;
 		}
 		if (funcName) {
-			debugInstruction += `\nFunction: ${funcName}`;
-		}
-		if (target) {
-			debugInstruction += `\nTarget to run: ${target}`;
+			debugInstruction += `\nBreakpoint Function: ${funcName}`;
 		}
 		if (variables && variables.length > 0) {
 			debugInstruction += `\nVariables to inspect: ${variables.join(', ')}`;
@@ -72,8 +99,11 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		console.log('[DebugSubagentTool] INVOKE CALLED');
 		console.log('[DebugSubagentTool] ========================================');
 		console.log('[DebugSubagentTool] Question:', question);
+		console.log('[DebugSubagentTool] Mode:', isPytest ? 'pytest' : isScript ? 'script' : 'unknown');
+		console.log('[DebugSubagentTool] TestFile:', testFile);
+		console.log('[DebugSubagentTool] TestName:', testName);
+		console.log('[DebugSubagentTool] Script:', script);
 		console.log('[DebugSubagentTool] File:', file);
-		console.log('[DebugSubagentTool] Target:', target);
 		console.log('[DebugSubagentTool] Line:', line);
 		console.log('[DebugSubagentTool] Function:', funcName);
 		console.log('[DebugSubagentTool] Variables:', variables);

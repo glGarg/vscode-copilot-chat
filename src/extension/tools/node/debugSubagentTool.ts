@@ -57,6 +57,11 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 	) { }
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugSubagentParams>, token: vscode.CancellationToken) {
+		console.log('[DebugSubagentTool] ================================================');
+		console.log('[DebugSubagentTool] DEBUG_SUBAGENT TOOL INVOKED');
+		console.log('[DebugSubagentTool] ================================================');
+		console.log('[DebugSubagentTool] Input:', JSON.stringify(options.input, null, 2));
+		
 		const { question, testFile, testName, script, scriptArgs, file, line, function: funcName, variables, context } = options.input;
 		
 		// Determine mode and build debug instruction
@@ -95,18 +100,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			debugInstruction += `\nContext/Hypothesis: ${context}`;
 		}
 
-		console.log('[DebugSubagentTool] ========================================');
-		console.log('[DebugSubagentTool] INVOKE CALLED');
-		console.log('[DebugSubagentTool] ========================================');
-		console.log('[DebugSubagentTool] Question:', question);
-		console.log('[DebugSubagentTool] Mode:', isPytest ? 'pytest' : isScript ? 'script' : 'unknown');
-		console.log('[DebugSubagentTool] TestFile:', testFile);
-		console.log('[DebugSubagentTool] TestName:', testName);
-		console.log('[DebugSubagentTool] Script:', script);
-		console.log('[DebugSubagentTool] File:', file);
-		console.log('[DebugSubagentTool] Line:', line);
-		console.log('[DebugSubagentTool] Function:', funcName);
-		console.log('[DebugSubagentTool] Variables:', variables);
+		console.log('[DebugSubagentTool] Debug instruction built:', debugInstruction);
 
 		// Define the tools available to the debug subagent
 		const allowedTools = new Set([
@@ -163,8 +157,12 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		// Build subagent trajectory metadata
 		const toolMetadata = {
 			question: question,
+			mode: isPytest ? 'pytest' : isScript ? 'script' : 'unknown',
+			testFile: testFile,
+			testName: testName,
+			script: script,
+			scriptArgs: scriptArgs,
 			file: file,
-			target: target,
 			line: line,
 			function: funcName,
 			variables: variables,

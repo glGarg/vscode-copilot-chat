@@ -61,6 +61,11 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 	public static readonly toolName = ToolName.DebugStartSession;
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IDebugStartSessionParams>, _token: vscode.CancellationToken) {
+		console.log('[DebugStartSessionTool] ================================================');
+		console.log('[DebugStartSessionTool] DEBUG_START_SESSION TOOL INVOKED');
+		console.log('[DebugStartSessionTool] ================================================');
+		console.log('[DebugStartSessionTool] Input:', JSON.stringify(options.input, null, 2));
+		
 		const {
 			testFile,
 			testName,
@@ -74,7 +79,10 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 		const isPytest = !!testFile;
 		const isScript = !!script;
 		
+		console.log('[DebugStartSessionTool] Mode:', isPytest ? 'pytest' : isScript ? 'script' : 'invalid');
+		
 		if (!isPytest && !isScript) {
+			console.log('[DebugStartSessionTool] ERROR: No testFile or script specified');
 			return this.errorResult(
 				'Must specify either testFile (for pytest) or script (for regular scripts).\n\n' +
 				'Examples:\n' +

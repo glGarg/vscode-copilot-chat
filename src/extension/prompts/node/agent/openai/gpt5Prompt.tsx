@@ -39,22 +39,22 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				**Step 1: Understand the bug** (before making changes)<br />
 				```<br />
-				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", test: "com.example.MyTest#testMethod"{'}'})<br />
+				debug_subagent({'{'}question: "What exception occurs when running test_function?", target: "test_module.py::test_function"{'}'})<br />
 				```<br />
 				Be specific - include the actual test name rather than saying "the failing test".<br />
 				<br />
 				**Step 2: Investigate root cause**<br />
 				```<br />
 				debug_subagent({'{'}question: "What is the value of [variable] at [location]?"{'}'})<br />
-				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
+				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "module.py", line: N{'}'})<br />
 				```<br />
 				<br />
 				**Step 3: Apply your fix**<br />
 				<br />
 				**Step 4: Verify the fix by running actual tests**<br />
 				```<br />
-				run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
-				→ Parse output: "Tests run: X, Failures: Y, Errors: Z"<br />
+				run_in_terminal: "pytest test_module.py::test_function -v"<br />
+				→ Parse output: "1 passed" or "1 failed"<br />
 				```<br />
 				<br />
 				### Validation Loop - CRITICAL<br />
@@ -65,7 +65,7 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				while (tests still failing AND attempts {'<'} 3) {'{'}<br />
 				  1. Use debug_subagent to understand the current failure (NOT to verify if it passes)<br />
 				  2. Apply your fix based on the evidence<br />
-				  3. Run the actual test command (mvn test / gradle test) via run_in_terminal<br />
+				  3. Run the actual test command (pytest) via run_in_terminal<br />
 				  4. Check the test output - did tests pass?<br />
 				     • If YES: Done! ✓<br />
 				     • If NO: Go back to step 1 with debug_subagent to understand the new failure<br />
@@ -75,18 +75,18 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				**Example with iteration:**<br />
 				```<br />
 				// First attempt:<br />
-				1. debug_subagent: "What causes NullPointerException in com.example.MyTest#testMethod?"<br />
-				   → "variable X is null at line 50"<br />
-				2. Apply fix: Add null check for X<br />
-				3. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
-				   → Output: "Tests run: 1, Failures: 1" ✗ Still failing!<br />
+				1. debug_subagent: "What causes TypeError in test_module.py::test_function?"<br />
+				   → "variable X is None at line 50"<br />
+				2. Apply fix: Add None check for X<br />
+				3. run_in_terminal: "pytest test_module.py::test_function -v"<br />
+				   → Output: "1 failed" ✗ Still failing!<br />
 				<br />
 				// Second attempt - iterate:<br />
-				4. debug_subagent: "What causes the ArrayIndexOutOfBoundsException in com.example.MyTest#testMethod?"<br />
-				   → "Array length is 5 but accessing index 10"<br />
+				4. debug_subagent: "What causes the IndexError in test_module.py::test_function?"<br />
+				   → "List length is 5 but accessing index 10"<br />
 				5. Apply fix: Add bounds check<br />
-				6. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
-				   → Output: "Tests run: 1, Failures: 0, Errors: 0" ✓ Success!<br />
+				6. run_in_terminal: "pytest test_module.py::test_function -v"<br />
+				   → Output: "1 passed" ✓ Success!<br />
 				```<br />
 				<br />
 				### ⚠️ CRITICAL: Verification Rules<br />
@@ -100,15 +100,14 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				**ALWAYS verify with actual test commands:**<br />
 				```<br />
-				run_in_terminal: "mvn test -Dtest=TestClass#testMethod"<br />
-				→ Parse output: "Tests run: X, Failures: Y, Errors: Z"<br />
-				→ If Y=0 and Z=0: Test passes ✓<br />
+				run_in_terminal: "pytest test_module.py::test_function -v"<br />
+				→ Parse output: "X passed, Y failed"<br />
+				→ If Y=0: Test passes ✓<br />
 				```<br />
 				<br />
 				**Use debug_subagent ONLY to understand failures, never to verify passes.**<br />
 				<br />
 				### Tips:<br />
-				- debug_subagent handles compilation automatically (incremental builds are fast)<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
 				- Use it to understand failures, but always verify with actual test commands<br />
 				- If a fix doesn't work, use debug_subagent to understand why<br />

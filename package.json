@@ -199,30 +199,34 @@
 				"displayName": "Debug Subagent",
 				"icon": "$(bug)",
 				"canBeReferencedInPrompt": true,
-				"userDescription": "Ask questions about Java runtime behavior using JDB debugger",
-				"modelDescription": "A Runtime Oracle that answers specific questions about Java program execution using JDB (Java Debugger).\n\nUse this tool to ask specific questions about runtime behavior:\n- Variable values: \"What is `listType` at ObjectReaderImplList.java:330?\"\n- Reachability: \"Does execution reach line 450 during test X?\"\n- Condition evaluation: \"Why does `x != y` evaluate to true at line 335?\"\n- Exception causes: \"What causes the NullPointerException in ClearMocksTest?\"\n- Comparison: \"Compare execution between passing testA and failing testB\"\n\nThe subagent will:\n1. Build the project\n2. Set breakpoints at specified locations\n3. Run the test\n4. Inspect variables and return factual answers\n\nCall this tool EARLY in your investigation (before writing fixes) to understand root causes.",
+				"userDescription": "Ask questions about Python runtime behavior using PDB debugger",
+				"modelDescription": "A Runtime Oracle that answers specific questions about Python program execution using PDB (Python Debugger).\n\nUse this tool to ask specific questions about runtime behavior:\n- Variable values: \"What is `data` at utils.py:330?\"\n- Reachability: \"Does execution reach line 450 during test X?\"\n- Condition evaluation: \"Why does `x != y` evaluate to true at line 335?\"\n- Exception causes: \"What causes the TypeError in test_module?\"\n- Comparison: \"Compare execution between passing test_a and failing test_b\"\n\nThe subagent will:\n1. Set breakpoints at specified locations\n2. Run the script or test with PDB\n3. Inspect variables and return factual answers\n\nCall this tool EARLY in your investigation (before writing fixes) to understand root causes.",
 				"tags": [
 					"debugging",
-					"java"
+					"python"
 				],
 				"inputSchema": {
 					"type": "object",
 					"properties": {
 						"question": {
 							"type": "string",
-							"description": "Specific question about runtime behavior. Examples: 'What is `listType` at line 330?', 'Why does the condition at line 335 evaluate to true?', 'What causes the NPE in test X?'"
+							"description": "Specific question about runtime behavior. Examples: 'What is `data` at line 330?', 'Why does the condition at line 335 evaluate to true?', 'What causes the TypeError in test X?'"
 						},
 						"file": {
 							"type": "string",
-							"description": "File path to focus on (helps target breakpoints). Optional."
+							"description": "Python file path to focus on (helps target breakpoints). Optional."
 						},
-						"test": {
+						"target": {
 							"type": "string",
-							"description": "Fully qualified test name to run (e.g., 'com.example.MyTest#testMethod'). Optional."
+							"description": "Python script or module to run (e.g., 'test_example.py' or '-m pytest test_example.py::test_func'). Optional."
 						},
 						"line": {
 							"type": "number",
 							"description": "Specific line number to set breakpoint. Optional."
+						},
+						"function": {
+							"type": "string",
+							"description": "Function name to break on (alternative to line). Optional."
 						},
 						"variables": {
 							"type": "array",
@@ -245,59 +249,59 @@
 				"displayName": "Debug Start Session",
 				"icon": "$(debug-start)",
 				"canBeReferencedInPrompt": false,
-				"userDescription": "Start a complete Java debug session with initial breakpoints",
-				"modelDescription": "Start a complete Java debug session atomically. This tool handles everything in one call:\n1. Starts the test with debug agent (suspend=y)\n2. Waits for debug port to be ready\n3. Attaches JDB\n4. Sets all initial breakpoints\n5. Continues execution until first breakpoint hit\n\nThis eliminates race conditions between attach and breakpoint setting.\n\nIMPORTANT: The project must already be compiled before calling this tool.\n\nTo restart with different breakpoints, just call this tool again - it automatically cleans up the previous session.",
+				"userDescription": "Start a complete Python debug session with initial breakpoints",
+				"modelDescription": "Start a complete Python debug session with PDB atomically. This tool handles everything in one call:\n1. Starts Python with PDB or runs pytest with --pdb\n2. Sets all initial breakpoints\n3. Continues execution until first breakpoint hit\n\nSupports multiple run modes:\n- Script: python -m pdb script.py\n- Module: python -m pdb -m module_name\n- Pytest: pytest --pdb test_file.py::test_func\n\nTo restart with different breakpoints, just call this tool again - it automatically cleans up the previous session.",
 				"tags": [
 					"debugging"
 				],
 				"inputSchema": {
 					"type": "object",
 					"properties": {
-						"test": {
+						"target": {
 							"type": "string",
-							"description": "Test to run (e.g., 'com.example.MyTest#testMethod' or 'MyTest#testMethod')"
+							"description": "Script, module, or pytest target to run (e.g., 'script.py', '-m module_name', or 'test_file.py::test_func')"
+						},
+						"args": {
+							"type": "array",
+							"items": { "type": "string" },
+							"description": "Arguments to pass to the script"
 						},
 						"initialBreakpoints": {
 							"type": "array",
 							"items": {
 								"type": "object",
 								"properties": {
-									"className": {
+									"file": {
 										"type": "string",
-										"description": "MUST be fully qualified class name (e.g., 'com.example.MyClass'). Simple names will NOT work!"
+										"description": "Python file path (relative or absolute)"
 									},
-									"method": {
+									"function": {
 										"type": "string",
-										"description": "Method name for method-entry breakpoint"
+										"description": "Function name for function-entry breakpoint"
 									},
 									"line": {
 										"type": "number",
 										"description": "Line number for line breakpoint"
+									},
+									"condition": {
+										"type": "string",
+										"description": "Optional condition expression for conditional breakpoint"
 									}
 								},
-								"required": ["className"]
+								"required": ["file"]
 							},
 							"description": "Initial breakpoints to set before continuing execution"
-						},
-						"catchExceptions": {
-							"type": "array",
-							"items": { "type": "string" },
-							"description": "Exception types to catch (e.g., ['NullPointerException', 'AssertionError'])"
 						},
 						"workingDir": {
 							"type": "string",
 							"description": "Working directory (defaults to workspace root)"
-						},
-						"port": {
-							"type": "number",
-							"description": "Debug port (default: 5005)"
 						},
 						"timeout": {
 							"type": "number",
 							"description": "Timeout in seconds to wait for breakpoint hit (default: 60)"
 						}
 					},
-					"required": ["test"]
+					"required": ["target"]
 				}
 			},
 			{
@@ -306,42 +310,29 @@
 				"displayName": "Debug Start",
 				"icon": "$(debug-start)",
 				"canBeReferencedInPrompt": false,
-				"userDescription": "Start a JDB debugging session",
-				"modelDescription": "Start or attach to a JDB (Java Debugger) session. Use 'launch' mode to start debugging a new Java process, or 'attach' mode to connect to an already running Java process with debug enabled.\n\nPrerequisites:\n- Project must be compiled with debug symbols (javac -g, or mvn/gradle compile)\n- For attach mode: target JVM must be started with -agentlib:jdwp=transport=dt_socket,server=y,address=<port>",
+				"userDescription": "Start a PDB debugging session",
+				"modelDescription": "Start a PDB (Python Debugger) session. Run a Python script or module under debugger control.\n\nModes:\n- Script: python -m pdb script.py args...\n- Module: python -m pdb -m module_name args...\n- Expression: python -c 'code' (with breakpoint() calls)",
 				"tags": [
 					"debugging"
 				],
 				"inputSchema": {
 					"type": "object",
 					"properties": {
-						"mode": {
+						"target": {
 							"type": "string",
-							"enum": ["launch", "attach"],
-							"description": "'launch' to start a new JVM process, 'attach' to connect to a running JVM"
-						},
-						"mainClass": {
-							"type": "string",
-							"description": "Fully qualified main class name (required for launch mode)"
-						},
-						"port": {
-							"type": "number",
-							"description": "Debug port number (required for attach mode)"
-						},
-						"classpath": {
-							"type": "string",
-							"description": "Classpath for the application (e.g., 'target/classes' for Maven projects)"
+							"description": "Python script path or -m module_name to debug"
 						},
 						"args": {
 							"type": "array",
 							"items": { "type": "string" },
-							"description": "Program arguments to pass to the main class"
+							"description": "Arguments to pass to the script/module"
 						},
-						"suspend": {
-							"type": "boolean",
-							"description": "Whether to suspend the JVM on start (default: true)"
+						"workingDir": {
+							"type": "string",
+							"description": "Working directory for the debug session"
 						}
 					},
-					"required": ["mode"]
+					"required": ["target"]
 				}
 			},
 			{
@@ -350,8 +341,8 @@
 				"displayName": "Debug Breakpoint",
 				"icon": "$(debug-breakpoint)",
 				"canBeReferencedInPrompt": false,
-				"userDescription": "Manage JDB breakpoints",
-				"modelDescription": "Set, remove, list, enable, or disable breakpoints in a JDB session.\n\nBreakpoint types:\n- Method breakpoint: {action: 'set', className: 'TypeUtils', method: 'cast'}\n- Code pattern: {action: 'set', className: 'ObjectReaderImplList', nearCode: 'if (listType != null)'}\n- Line breakpoint: {action: 'set', className: 'TypeUtils', line: 330}",
+				"userDescription": "Manage PDB breakpoints",
+				"modelDescription": "Set, remove, list, enable, or disable breakpoints in a PDB session.\n\nBreakpoint types:\n- Line breakpoint: {action: 'set', file: 'utils.py', line: 42}\n- Function breakpoint: {action: 'set', file: 'utils.py', function: 'process_data'}\n- Conditional: {action: 'set', file: 'utils.py', line: 42, condition: 'x > 10'}",
 				"tags": [
 					"debugging"
 				],
@@ -360,24 +351,16 @@
 					"properties": {
 						"action": {
 							"type": "string",
-							"enum": ["set", "remove", "list", "enable", "disable"],
+							"enum": ["set", "remove", "list", "enable", "disable", "condition"],
 							"description": "Action to perform on breakpoints"
-						},
-						"className": {
-							"type": "string",
-							"description": "MUST be fully qualified class name (e.g., 'com.example.TypeUtils'). Simple names will NOT work!"
-						},
-						"method": {
-							"type": "string",
-							"description": "Method name for method-entry breakpoint (e.g., 'cast', 'readObject')"
-						},
-						"nearCode": {
-							"type": "string",
-							"description": "Code snippet to search for - breakpoint set at line containing this code"
 						},
 						"file": {
 							"type": "string",
-							"description": "File path to search when using nearCode"
+							"description": "Python file path (relative or absolute)"
+						},
+						"function": {
+							"type": "string",
+							"description": "Function name for function-entry breakpoint"
 						},
 						"line": {
 							"type": "number",
@@ -385,15 +368,11 @@
 						},
 						"condition": {
 							"type": "string",
-							"description": "Conditional expression (e.g., 'i > 100')"
+							"description": "Conditional expression (e.g., 'x > 10', 'len(items) == 0')"
 						},
-						"hitCount": {
+						"breakpointNumber": {
 							"type": "number",
-							"description": "Break only after this many hits"
-						},
-						"breakpointId": {
-							"type": "string",
-							"description": "Breakpoint ID (for remove/enable/disable actions)"
+							"description": "Breakpoint number (for remove/enable/disable/condition actions)"
 						}
 					},
 					"required": ["action"]
@@ -405,8 +384,8 @@
 				"displayName": "Debug Control",
 				"icon": "$(debug-continue)",
 				"canBeReferencedInPrompt": false,
-				"userDescription": "Control JDB execution flow",
-				"modelDescription": "Control program execution in a JDB session. Actions:\n- run: Start program execution\n- continue: Resume execution until next breakpoint\n- step_into: Step into method calls\n- step_over: Step over method calls (stay in current method)\n- step_out: Step out of current method\n- pause: Suspend execution\n- terminate: End the debug session",
+				"userDescription": "Control PDB execution flow",
+				"modelDescription": "Control program execution in a PDB session. Actions:\n- continue: Resume execution until next breakpoint (c)\n- step_into: Step into function calls (s)\n- step_over: Step over function calls (n)\n- step_out: Return from current function (r)\n- until: Continue until line >= lineno\n- jump: Jump to line (skip code)\n- restart: Restart the program\n- quit: End the debug session",
 				"tags": [
 					"debugging"
 				],
@@ -415,12 +394,12 @@
 					"properties": {
 						"action": {
 							"type": "string",
-							"enum": ["run", "continue", "step_into", "step_over", "step_out", "pause", "terminate"],
+							"enum": ["continue", "step_into", "step_over", "step_out", "until", "jump", "restart", "quit"],
 							"description": "Execution control action"
 						},
-						"threadId": {
-							"type": "string",
-							"description": "Thread ID to control (optional, defaults to current thread)"
+						"lineno": {
+							"type": "number",
+							"description": "Line number for until/jump actions"
 						}
 					},
 					"required": ["action"]
@@ -432,8 +411,8 @@
 				"displayName": "Debug Inspect",
 				"icon": "$(debug-variables)",
 				"canBeReferencedInPrompt": false,
-				"userDescription": "Inspect program state in JDB",
-				"modelDescription": "Inspect program state during debugging. Actions:\n- locals: Show all local variables in current stack frame\n- eval: Evaluate an expression (e.g., 'myList.size()', 'x + y')\n- stack: Show the current call stack (stack trace)\n- this: Inspect the 'this' object\n- fields: Show fields of an object",
+				"userDescription": "Inspect program state in PDB",
+				"modelDescription": "Inspect program state during debugging. Actions:\n- locals: Show all local variables (using locals())\n- globals: Show global variables (using globals())\n- eval: Print expression value (p expr)\n- pretty_print: Pretty print expression (pp expr)\n- stack: Show current call stack (w)\n- args: Show arguments of current function (a)\n- display: Add expression to display list (shown every step)\n- undisplay: Remove expression from display list\n- interact: Start interactive Python interpreter at current frame",
 				"tags": [
 					"debugging"
 				],
@@ -442,24 +421,16 @@
 					"properties": {
 						"action": {
 							"type": "string",
-							"enum": ["locals", "eval", "stack", "this", "fields"],
+							"enum": ["locals", "globals", "eval", "pretty_print", "stack", "args", "display", "undisplay", "interact"],
 							"description": "Inspection action"
 						},
 						"expression": {
 							"type": "string",
-							"description": "Expression to evaluate (required for 'eval' action)"
+							"description": "Expression to evaluate/display (required for eval, pretty_print, display)"
 						},
-						"objectId": {
-							"type": "string",
-							"description": "Object ID to inspect fields of"
-						},
-						"maxDepth": {
+						"displayNumber": {
 							"type": "number",
-							"description": "How deep to expand nested objects (default: 2)"
-						},
-						"maxStringLength": {
-							"type": "number",
-							"description": "Truncate strings longer than this (default: 100)"
+							"description": "Display number to remove (for undisplay action)"
 						}
 					},
 					"required": ["action"]
@@ -468,11 +439,11 @@
 			{
 				"name": "debug_threads",
 				"toolReferenceName": "debugThreads",
-				"displayName": "Debug Threads",
+				"displayName": "Debug Frames",
 				"icon": "$(debug-stackframe)",
 				"canBeReferencedInPrompt": false,
-				"userDescription": "Manage threads in JDB",
-				"modelDescription": "Manage and inspect threads in a JDB session. Useful for debugging multi-threaded applications and diagnosing deadlocks.\n\nActions:\n- list: Show all threads and their states\n- switch: Switch debugger context to a different thread\n- suspend: Pause a specific thread\n- resume: Resume a specific thread\n- stack_all: Get stack traces for ALL threads (useful for deadlock detection)",
+				"userDescription": "Navigate stack frames in PDB",
+				"modelDescription": "Navigate and inspect stack frames in a PDB session. Python uses a single-threaded debugging model (due to GIL), so this focuses on frame navigation rather than thread management.\n\nActions:\n- up: Move up one frame in the call stack\n- down: Move down one frame in the call stack\n- frame: Jump to a specific frame number\n- where: Show the full call stack with current position",
 				"tags": [
 					"debugging"
 				],
@@ -481,26 +452,12 @@
 					"properties": {
 						"action": {
 							"type": "string",
-							"enum": ["list", "switch", "suspend", "resume", "stack_all"],
-							"description": "Thread management action"
+							"enum": ["up", "down", "frame", "where"],
+							"description": "Frame navigation action"
 						},
-						"threadId": {
-							"type": "string",
-							"description": "Thread ID (required for switch/suspend/resume)"
-						},
-						"filter": {
-							"type": "object",
-							"properties": {
-								"state": {
-									"type": "string",
-									"enum": ["running", "waiting", "blocked", "all"],
-									"description": "Filter threads by state"
-								},
-								"excludeSystem": {
-									"type": "boolean",
-									"description": "Exclude system threads like GC, Finalizer (default: true)"
-								}
-							}
+						"frameNumber": {
+							"type": "number",
+							"description": "Frame number to jump to (for 'frame' action)"
 						}
 					},
 					"required": ["action"]

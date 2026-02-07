@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ChildProcess, spawn } from 'child_process';
+import * as fs from 'fs';
 
 export interface IPdbSession {
 	sessionId: string;
@@ -16,6 +17,22 @@ export interface IPdbSession {
 
 // Global PDB session storage
 const sessions = new Map<string, IPdbSession>();
+
+/**
+ * Find the best Python executable to use.
+ * Prefers conda testbed environment if available (for SWE-bench).
+ */
+function findPythonExecutable(): string {
+	// Check for conda testbed environment (SWE-bench uses this)
+	const condaPython = '/opt/miniconda3/envs/testbed/bin/python';
+	if (fs.existsSync(condaPython)) {
+		console.log(`[PdbSession] Using conda testbed Python: ${condaPython}`);
+		return condaPython;
+	}
+	// Fall back to system python
+	console.log('[PdbSession] Using system python');
+	return 'python';
+}
 
 /**
  * Start a new PDB session to debug a Python script.
@@ -74,7 +91,10 @@ async function launchPdbProcess(
 ): Promise<{ success: boolean; output: string; error?: string }> {
 	return new Promise((resolve) => {
 		try {
-			const proc = spawn('python', args, {
+			const pythonExe = findPythonExecutable();
+			console.log(`[PdbSession] Launching: ${pythonExe} ${args.join(' ')}`);
+			
+			const proc = spawn(pythonExe, args, {
 				cwd: workingDir || process.cwd(),
 				shell: false,
 				env: {

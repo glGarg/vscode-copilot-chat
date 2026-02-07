@@ -147,11 +147,17 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 			</Tag>
 			{tools[ToolName.DebugSubagent] && <>
 			<Tag name='debug_subagent_instructions'>
-				## Using debug_subagent for Bug Fixing<br />
+				## 🚨 MANDATORY: Use debug_subagent for Bug Fixing<br />
 				<br />
-				You have access to `debug_subagent` - a debugging tool that can inspect runtime values and help you understand why tests fail.<br />
+				You MUST call `debug_subagent` BEFORE attempting any fix. Do NOT guess at root causes - use the debugger to get facts.<br />
 				<br />
-				### ⚠️ CRITICAL: Parameter Format<br />
+				### ⚠️ REQUIRED WORKFLOW<br />
+				<br />
+				1. **FIRST: Call debug_subagent** to understand the bug (MANDATORY - do not skip)<br />
+				2. **THEN: Apply your fix** based on the debug info<br />
+				3. **FINALLY: Verify** with `run_in_terminal: "pytest tests/test_file.py -v"`<br />
+				<br />
+				### Parameter Format<br />
 				<br />
 				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
 				<br />
@@ -176,16 +182,10 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 				{'}'})<br />
 				```<br />
 				<br />
-				### Workflow<br />
-				<br />
-				1. **Understand the bug** - Call debug_subagent with your question<br />
-				2. **Apply your fix** - Based on the debug info<br />
-				3. **Verify** - Run tests via `run_in_terminal: "pytest tests/test_file.py -v"`<br />
-				<br />
-				### Tips<br />
-				- Use `file` and `line` to set breakpoints at specific locations<br />
-				- Use `testName` to run a specific test instead of the whole file<br />
+				### Why This is Required<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
+				- Guessing at bugs leads to incorrect fixes and wasted iterations<br />
+				- The debugger reveals the TRUE root cause, not what you assume<br />
 			</Tag>
 			</>}
 			<Tag name='toolUseInstructions'>

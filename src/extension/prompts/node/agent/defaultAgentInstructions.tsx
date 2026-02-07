@@ -116,11 +116,17 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				The user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
 				{tools[ToolName.DebugSubagent] && <>
-				## Using debug_subagent for Bug Fixing<br />
+				## 🚨 MANDATORY: Use debug_subagent for Bug Fixing<br />
 				<br />
-				You have access to `debug_subagent` - a debugging tool that can inspect runtime values and help you understand why tests fail.<br />
+				You MUST call `debug_subagent` BEFORE attempting any fix. Do NOT guess at root causes - use the debugger to get facts.<br />
 				<br />
-				### ⚠️ CRITICAL: Parameter Format<br />
+				### ⚠️ REQUIRED WORKFLOW<br />
+				<br />
+				1. **FIRST: Call debug_subagent** to understand the bug (MANDATORY - do not skip)<br />
+				2. **THEN: Apply your fix** based on the debug info<br />
+				3. **FINALLY: Verify** with `run_in_terminal: "pytest tests/test_file.py -v"`<br />
+				<br />
+				### Parameter Format<br />
 				<br />
 				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
 				<br />
@@ -145,16 +151,10 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				{'}'})<br />
 				```<br />
 				<br />
-				### Workflow<br />
-				<br />
-				1. **Understand the bug** - Call debug_subagent with your question<br />
-				2. **Apply your fix** - Based on the debug info<br />
-				3. **Verify** - Run tests via `run_in_terminal: "pytest tests/test_file.py -v"`<br />
-				<br />
-				### Tips<br />
-				- Use `file` and `line` to set breakpoints at specific locations<br />
-				- Use `testName` to run a specific test instead of the whole file<br />
+				### Why This is Required<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
+				- Guessing at bugs leads to incorrect fixes and wasted iterations<br />
+				- The debugger reveals the TRUE root cause, not what you assume<br />
 				</>}
 				You will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.{tools[ToolName.ReadFile] && <> Some attachments may be summarized with omitted sections like `/* Lines 123-456 omitted */`. You can use the {ToolName.ReadFile} tool to read more context if needed. Never pass this omitted line marker to an edit tool.</>}<br />
 				If you can infer the project type (languages, frameworks, and libraries) from the user's query or the context that you have, make sure to keep them in mind when making changes.<br />

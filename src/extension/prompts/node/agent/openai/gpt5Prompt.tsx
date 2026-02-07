@@ -44,27 +44,40 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				### Parameter Format<br />
 				<br />
 				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
+				**ALWAYS use ABSOLUTE paths** (starting with `/`) for all file parameters to avoid path resolution errors.<br />
 				<br />
-				**For PYTEST tests:**<br />
+				**For PYTEST tests** (use existing test files):<br />
 				```<br />
 				debug_subagent({'{'}<br />
 				{'  '}question: "What causes the TypeError?",<br />
-				{'  '}testFile: "tests/test_example.py",      // Test file to run<br />
-				{'  '}testName: "test_my_function",           // Optional: specific test<br />
-				{'  '}file: "src/utils.py",                   // Optional: breakpoint file<br />
-				{'  '}line: 42                                // Optional: breakpoint line<br />
+				{'  '}testFile: "/testbed/tests/test_example.py",  // ABSOLUTE path to test<br />
+				{'  '}testName: "test_my_function",                // Optional: specific test<br />
+				{'  '}file: "/testbed/src/utils.py",               // ABSOLUTE path for breakpoint<br />
+				{'  '}line: 42                                     // Breakpoint line<br />
 				{'}'})<br />
 				```<br />
 				<br />
-				**For regular SCRIPTS:**<br />
+				**For custom SCRIPTS** (when you need a reproduction script):<br />
 				```<br />
+				// STEP 1: First CREATE the script<br />
+				create_file({'{'}path: "/testbed/repro.py", content: "..."{'}'})<br />
+				<br />
+				// STEP 2: Then call debug_subagent with the script<br />
 				debug_subagent({'{'}<br />
-				{'  '}question: "What is x at line 50?",<br />
-				{'  '}script: "main.py",                      // Script to run<br />
-				{'  '}file: "main.py",                        // Breakpoint file<br />
-				{'  '}line: 50                                // Breakpoint line<br />
+				{'  '}question: "What is x at line 10?",<br />
+				{'  '}script: "/testbed/repro.py",             // ABSOLUTE path to script you created<br />
+				{'  '}file: "/testbed/src/module.py",          // ABSOLUTE path for breakpoint<br />
+				{'  '}line: 50                                 // Breakpoint line<br />
 				{'}'})<br />
 				```<br />
+				<br />
+				### ⚠️ IMPORTANT: Create Scripts Before Debugging<br />
+				<br />
+				If you need a reproduction script, you MUST:<br />
+				1. **CREATE** the script file first using `create_file`<br />
+				2. **THEN** call `debug_subagent` with the script path<br />
+				<br />
+				Do NOT pass script paths that don't exist yet!<br />
 				<br />
 				### Why This is Required<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />

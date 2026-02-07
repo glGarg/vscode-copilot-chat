@@ -64,6 +64,36 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		
 		const { question, testFile, testName, script, scriptArgs, file, line, function: funcName, variables, context } = options.input;
 		
+		// Validate script parameter - reject "-", empty string, or relative paths
+		if (script) {
+			if (script === '-' || script === '') {
+				const errorMessage = 
+					`ERROR: Invalid script parameter "${script}".\n\n` +
+					`The 'script' parameter must be a valid absolute Python file path.\n\n` +
+					`Example: script: "/testbed/repro.py"`;
+				console.log('[DebugSubagentTool] ERROR: Invalid script parameter:', script);
+				return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+			}
+			if (!script.startsWith('/')) {
+				const errorMessage = 
+					`ERROR: Relative path not allowed for script: "${script}".\n\n` +
+					`You MUST use an absolute path starting with /.\n\n` +
+					`Example: script: "/testbed/${script}"`;
+				console.log('[DebugSubagentTool] ERROR: Relative script path:', script);
+				return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+			}
+		}
+		
+		// Validate testFile parameter - reject relative paths
+		if (testFile && !testFile.startsWith('/')) {
+			const errorMessage = 
+				`ERROR: Relative path not allowed for testFile: "${testFile}".\n\n` +
+				`You MUST use an absolute path starting with /.\n\n` +
+				`Example: testFile: "/testbed/${testFile}"`;
+			console.log('[DebugSubagentTool] ERROR: Relative testFile path:', testFile);
+			return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+		}
+		
 		// Determine mode and build debug instruction
 		const isPytest = !!testFile;
 		const isScript = !!script;

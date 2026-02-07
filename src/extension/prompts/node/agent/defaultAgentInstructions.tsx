@@ -118,91 +118,43 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				{tools[ToolName.DebugSubagent] && <>
 				## Using debug_subagent for Bug Fixing<br />
 				<br />
-				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help you understand why tests fail. Use it to investigate bugs before making changes.<br />
+				You have access to `debug_subagent` - a debugging tool that can inspect runtime values and help you understand why tests fail.<br />
 				<br />
-				### Recommended Workflow:<br />
+				### ⚠️ CRITICAL: Parameter Format<br />
 				<br />
-				**Step 1: Build the project first**<br />
-				```bash<br />
-				# Maven: mvn test-compile -q<br />
-				# Gradle: ./gradlew testClasses -q<br />
+				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
+				<br />
+				**For PYTEST tests:**<br />
+				```<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "What causes the TypeError?",<br />
+				{'  '}testFile: "tests/test_example.py",      // Test file to run<br />
+				{'  '}testName: "test_my_function",           // Optional: specific test<br />
+				{'  '}file: "src/utils.py",                   // Optional: breakpoint file<br />
+				{'  '}line: 42                                // Optional: breakpoint line<br />
+				{'}'})<br />
 				```<br />
 				<br />
-				**Step 2: Understand the bug** (before making changes)<br />
+				**For regular SCRIPTS:**<br />
 				```<br />
-				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", test: "com.example.MyTest#testMethod"{'}'})<br />
-				```<br />
-				Be specific - include the actual test name rather than saying "the failing test".<br />
-				<br />
-				**Step 3: Investigate root cause**<br />
-				```<br />
-				debug_subagent({'{'}question: "What is the value of [variable] at [location]?"{'}'})<br />
-				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "What is x at line 50?",<br />
+				{'  '}script: "main.py",                      // Script to run<br />
+				{'  '}file: "main.py",                        // Breakpoint file<br />
+				{'  '}line: 50                                // Breakpoint line<br />
+				{'}'})<br />
 				```<br />
 				<br />
-				**Step 4: Apply your fix**<br />
+				### Workflow<br />
 				<br />
-				**Step 5: Verify the fix by running actual tests**<br />
-				```<br />
-				run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
-				→ Parse output: "Tests run: X, Failures: Y, Errors: Z"<br />
-				```<br />
+				1. **Understand the bug** - Call debug_subagent with your question<br />
+				2. **Apply your fix** - Based on the debug info<br />
+				3. **Verify** - Run tests via `run_in_terminal: "pytest tests/test_file.py -v"`<br />
 				<br />
-				### Validation Loop - CRITICAL<br />
-				<br />
-				After applying a fix, verify it worked by running actual tests. If tests still fail, iterate:<br />
-				<br />
-				```<br />
-				while (tests still failing AND attempts {'<'} 3) {'{'}<br />
-				  1. Use debug_subagent to understand the current failure (NOT to verify if it passes)<br />
-				  2. Apply your fix based on the evidence<br />
-				  3. Run the actual test command (mvn test / gradle test) via run_in_terminal<br />
-				  4. Check the test output - did tests pass?<br />
-				     • If YES: Done! ✓<br />
-				     • If NO: Go back to step 1 with debug_subagent to understand the new failure<br />
-				{'}'}<br />
-				```<br />
-				<br />
-				**Example with iteration:**<br />
-				```<br />
-				// First attempt:<br />
-				1. Build: mvn test-compile<br />
-				2. debug_subagent: "What causes NullPointerException in com.example.MyTest#testMethod?"<br />
-				   → "variable X is null at line 50"<br />
-				3. Apply fix: Add null check for X<br />
-				4. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
-				   → Output: "Tests run: 1, Failures: 1" ✗ Still failing!<br />
-				<br />
-				// Second attempt - iterate:<br />
-				5. debug_subagent: "What causes the ArrayIndexOutOfBoundsException in com.example.MyTest#testMethod?"<br />
-				   → "Array length is 5 but accessing index 10"<br />
-				6. Apply fix: Add bounds check<br />
-				7. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
-				   → Output: "Tests run: 1, Failures: 0, Errors: 0" ✓ Success!<br />
-				```<br />
-				<br />
-				### ⚠️ CRITICAL: Verification Rules<br />
-				<br />
-				**NEVER use debug_subagent to verify if tests pass.**<br />
-				<br />
-				debug_subagent cannot reliably determine if tests pass because:<br />
-				- Tests may fail without throwing exceptions<br />
-				- Assertions may be caught/handled<br />
-				- Test frameworks report results differently<br />
-				<br />
-				**ALWAYS verify with actual test commands:**<br />
-				```<br />
-				run_in_terminal: "mvn test -Dtest=TestClass#testMethod"<br />
-				→ Parse output: "Tests run: X, Failures: Y, Errors: Z"<br />
-				→ If Y=0 and Z=0: Test passes ✓<br />
-				```<br />
-				<br />
-				**Use debug_subagent ONLY to understand failures, never to verify passes.**<br />
-				<br />
-				### Tips:<br />
+				### Tips<br />
+				- Use `file` and `line` to set breakpoints at specific locations<br />
+				- Use `testName` to run a specific test instead of the whole file<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
-				- Use it to understand failures, but always verify with actual test commands<br />
-				- If a fix doesn't work, use debug_subagent to understand why<br />
 				</>}
 				You will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.{tools[ToolName.ReadFile] && <> Some attachments may be summarized with omitted sections like `/* Lines 123-456 omitted */`. You can use the {ToolName.ReadFile} tool to read more context if needed. Never pass this omitted line marker to an edit tool.</>}<br />
 				If you can infer the project type (languages, frameworks, and libraries) from the user's query or the context that you have, make sure to keep them in mind when making changes.<br />
@@ -222,7 +174,7 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				No need to ask permission before using a tool.<br />
 				NEVER say the name of a tool to a user. For example, instead of saying that you'll use the {ToolName.CoreRunInTerminal} tool, say "I'll run the command in a terminal".<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
-				{tools[ToolName.DebugSubagent] && <>For Java bug fixing, use {ToolName.DebugSubagent} to understand the bug, investigate root causes, and verify fixes.<br /></>}
+				{tools[ToolName.DebugSubagent] && <>For Python bug fixing, use {ToolName.DebugSubagent} to understand the bug and investigate root causes.<br /></>}
 				If you think running multiple tools can answer the user's question, prefer calling them in parallel whenever possible{tools[ToolName.Codebase] && <>, but do not call {ToolName.Codebase} in parallel.</>}<br />
 				{tools[ToolName.ReadFile] && <>When using the {ToolName.ReadFile} tool, prefer reading a large section over calling the {ToolName.ReadFile} tool many times in sequence. You can also think of all the pieces you may be interested in and read them in parallel. Read large enough context to ensure you get what you need.<br /></>}
 				{tools[ToolName.Codebase] && <>If {ToolName.Codebase} returns the full contents of the text files in the workspace, you have all the workspace context.<br /></>}

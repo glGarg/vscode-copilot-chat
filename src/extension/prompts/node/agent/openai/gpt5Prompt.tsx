@@ -43,8 +43,9 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				### Parameter Format<br />
 				<br />
+				The `function` parameter is **REQUIRED** - specify which function/method to debug.<br />
 				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
-				**ALWAYS use ABSOLUTE paths** (starting with `/`) for all file parameters to avoid path resolution errors.<br />
+				**ALWAYS use ABSOLUTE paths** (starting with `/`) for all file parameters.<br />
 				<br />
 				**For PYTEST tests** (use existing test files):<br />
 				```<br />
@@ -52,8 +53,9 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				{'  '}question: "What causes the TypeError?",<br />
 				{'  '}testFile: "/testbed/tests/test_example.py",  // ABSOLUTE path to test<br />
 				{'  '}testName: "test_my_function",                // Optional: specific test<br />
-				{'  '}file: "/testbed/src/utils.py",               // ABSOLUTE path for breakpoint<br />
-				{'  '}line: 42                                     // Breakpoint line<br />
+				{'  '}file: "/testbed/src/utils.py",               // ABSOLUTE path to file<br />
+				{'  '}function: "process_data",                    // REQUIRED: function to debug<br />
+				{'  '}line: 42                                     // Optional: specific line<br />
 				{'}'})<br />
 				```<br />
 				<br />
@@ -66,8 +68,9 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				debug_subagent({'{'}<br />
 				{'  '}question: "What is x at line 10?",<br />
 				{'  '}script: "/testbed/repro.py",             // ABSOLUTE path to script you created<br />
-				{'  '}file: "/testbed/src/module.py",          // ABSOLUTE path for breakpoint<br />
-				{'  '}line: 50                                 // Breakpoint line<br />
+				{'  '}file: "/testbed/src/module.py",          // ABSOLUTE path to file<br />
+				{'  '}function: "MyClass.validate",            // REQUIRED: function to debug<br />
+				{'  '}line: 50                                 // Optional: specific line<br />
 				{'}'})<br />
 				```<br />
 				<br />

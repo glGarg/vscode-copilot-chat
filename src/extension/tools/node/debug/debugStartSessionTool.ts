@@ -410,10 +410,37 @@ class DebugStartSessionTool implements ICopilotTool<IDebugStartSessionParams> {
 				break;
 
 			case 'timeout':
+				// Check if test failed before hitting breakpoint
+				const testFailed = result.output?.includes('FAILED') || result.output?.includes('ERROR');
+				const testPassed = result.output?.includes('passed') && !testFailed;
+				
+				let timeoutHint = '';
+				if (testFailed) {
+					timeoutHint = 
+						`⚠️ The test FAILED before your breakpoint was reached!\n\n` +
+						`This means the breakpoint location is not in the execution path that leads to the failure.\n\n` +
+						`**Try one of these:**\n` +
+						`1. Set a breakpoint INSIDE the test function itself to step through\n` +
+						`2. Set a breakpoint at an earlier point in the call chain\n` +
+						`3. Look at the traceback below to find where the failure occurred\n\n`;
+				} else if (testPassed) {
+					timeoutHint = 
+						`⚠️ The test PASSED but your breakpoint was never hit.\n\n` +
+						`The breakpoint location is not in the code path for this test.\n\n` +
+						`**Try:**\n` +
+						`1. Verify the file/function is actually called by this test\n` +
+						`2. Set a breakpoint in the test function itself\n\n`;
+				} else {
+					timeoutHint = 
+						`The breakpoint location may not be in the execution path.\n\n` +
+						`**Try:**\n` +
+						`1. Set a breakpoint at line 1 of the test function itself\n` +
+						`2. Verify the breakpoint file is imported by the test\n\n`;
+				}
+				
 				message =
-					`⏰ TIMEOUT\n\n` +
-					`Debug session timed out waiting for breakpoint.\n\n` +
-					`The program may be stuck or taking too long.\n\n` +
+					`⏰ TIMEOUT - Breakpoint not reached\n\n` +
+					timeoutHint +
 					`Output:\n${result.output || '(no output captured)'}`;
 				break;
 

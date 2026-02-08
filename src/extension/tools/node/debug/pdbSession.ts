@@ -72,7 +72,7 @@ export async function startPytestPdbSession(
 		'-m', 'pytest',
 		'--pdb',              // Drop into PDB on failure
 		'-s',                 // Don't capture stdout (allows PDB interaction)
-		'--tb=short',         // Short traceback format
+		'--tb=long',          // Long traceback format (shows full stack trace on failure)
 		testTarget
 	];
 

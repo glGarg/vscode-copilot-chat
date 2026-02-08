@@ -56,14 +56,15 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					**Exception Origin**: "What causes the TypeError?"<br />
 					→ Answer with the problematic value and why it's the wrong type<br />
 					<br />
-					## ⚠️ WORKFLOW: Use debug_start_session (Two-Stage Approach)<br />
+					## ⚠️ WORKFLOW: Setting Breakpoints<br />
 					<br />
-					The `debug_start_session` tool uses a **two-stage breakpoint approach** for reliability:<br />
+					**IMPORTANT: Always use FUNCTION breakpoints** - they are more reliable than line breakpoints!<br />
 					<br />
-					1. **Stage 1**: Automatically sets a breakpoint at the test function entry (guaranteed to hit)<br />
-					2. **Stage 2**: Your `initialBreakpoints` are set, then execution continues to your target<br />
+					When the input specifies a function AND a line:<br />
+					1. Set a **function breakpoint** to catch entry to the function<br />
+					2. Set a **line breakpoint** for the specific location within the function<br />
 					<br />
-					This prevents "script finished without hitting breakpoint" errors by ensuring we always pause before completion.<br />
+					This dual approach ensures you stop even if the exact line is slightly off.<br />
 					<br />
 					**⚠️ IMPORTANT: Always use ABSOLUTE paths** (starting with `/`) for all file paths!<br />
 					<br />
@@ -71,10 +72,10 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					```<br />
 					debug_start_session({'{'}
 					  testFile: "/testbed/tests/test_example.py",  // ABSOLUTE path
-					  testName: "test_function",                   // Specific test (enables two-stage)
+					  testName: "test_function",                   // Specific test
 					  initialBreakpoints: [
-					    {'{'}file: "/testbed/src/module.py", line: 42{'}'},
-					    {'{'}file: "/testbed/src/module.py", function: "process_data"{'}'}
+					    {'{'}file: "/testbed/src/module.py", function: "process_data"{'}'},  // Function entry
+					    {'{'}file: "/testbed/src/module.py", line: 42{'}'}                   // Specific line
 					  ]
 					{'}'})<br />
 					```<br />
@@ -85,6 +86,7 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					  script: "/testbed/repro.py",                // ABSOLUTE path to script
 					  args: ["--input", "data.txt"],              // Optional: script arguments
 					  initialBreakpoints: [
+					    {'{'}file: "/testbed/src/module.py", function: "MyClass.validate"{'}'},
 					    {'{'}file: "/testbed/src/module.py", line: 50{'}'}
 					  ]
 					{'}'})<br />

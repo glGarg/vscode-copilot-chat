@@ -33,12 +33,12 @@ export interface IDebugSubagentParams {
 	scriptArgs?: string[];
 	
 	// === Breakpoint specification ===
-	/** File to set breakpoint in (e.g., "src/utils.py") */
+	/** File to set breakpoint in (e.g., "/testbed/src/utils.py") - MUST be absolute path */
 	file?: string;
-	/** Line number for breakpoint */
+	/** Function or method name to break on (REQUIRED for breakpoint) - e.g., "process_data" or "MyClass.validate" */
+	function: string;
+	/** Optional: specific line number within the function for additional precision */
 	line?: number;
-	/** Function name to break on (alternative to line) */
-	function?: string;
 	
 	// === Inspection ===
 	/** Variables/expressions to inspect at the breakpoint */
@@ -63,6 +63,16 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		console.log('[DebugSubagentTool] Input:', JSON.stringify(options.input, null, 2));
 		
 		const { question, testFile, testName, script, scriptArgs, file, line, function: funcName, variables, context } = options.input;
+		
+		// Validate function parameter - REQUIRED
+		if (!funcName) {
+			const errorMessage = 
+				`ERROR: Missing required 'function' parameter.\n\n` +
+				`You MUST specify which function/method to debug.\n\n` +
+				`Example: function: "process_data" or function: "MyClass.validate"`;
+			console.log('[DebugSubagentTool] ERROR: Missing function parameter');
+			return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+		}
 		
 		// Validate script parameter - reject "-", empty string, or relative paths
 		if (script) {
@@ -94,6 +104,16 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
 		}
 		
+		// Validate file parameter - reject relative paths
+		if (file && !file.startsWith('/')) {
+			const errorMessage = 
+				`ERROR: Relative path not allowed for file: "${file}".\n\n` +
+				`You MUST use an absolute path starting with /.\n\n` +
+				`Example: file: "/testbed/${file}"`;
+			console.log('[DebugSubagentTool] ERROR: Relative file path:', file);
+			return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+		}
+		
 		// Determine mode and build debug instruction
 		const isPytest = !!testFile;
 		const isScript = !!script;
@@ -114,14 +134,13 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			}
 		}
 		
+		// Breakpoint specification - function is required, line is optional refinement
+		debugInstruction += `\nBreakpoint Function: ${funcName}`;
 		if (file) {
 			debugInstruction += `\nBreakpoint File: ${file}`;
 		}
 		if (line) {
-			debugInstruction += `\nBreakpoint Line: ${line}`;
-		}
-		if (funcName) {
-			debugInstruction += `\nBreakpoint Function: ${funcName}`;
+			debugInstruction += `\nBreakpoint Line: ${line} (additional precision within ${funcName})`;
 		}
 		if (variables && variables.length > 0) {
 			debugInstruction += `\nVariables to inspect: ${variables.join(', ')}`;

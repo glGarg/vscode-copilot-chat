@@ -55,7 +55,10 @@ export async function startPdbSession(
 
 /**
  * Start a pytest session with PDB debugging.
- * Uses: pytest --pdb -s testFile [testSelector]
+ * Uses: pytest --trace -s testFile [testSelector]
+ * 
+ * --trace: Starts PDB at the beginning of each test (allows setting breakpoints)
+ * --pdb: Only drops into PDB on failure (too late for breakpoints!)
  */
 export async function startPytestPdbSession(
 	sessionId: string,
@@ -64,19 +67,20 @@ export async function startPytestPdbSession(
 	workingDir?: string
 ): Promise<{ success: boolean; output: string; error?: string }> {
 
-	// Build pytest command with --pdb
-	// pytest --pdb -s tests/test_example.py::test_func
+	// Build pytest command with --trace
+	// --trace starts PDB at test start, allowing us to set breakpoints BEFORE the test runs
+	// This is critical because --pdb only activates AFTER a failure (too late!)
 	const testTarget = testName ? `${testFile}::${testName}` : testFile;
 	
 	const pytestArgs: string[] = [
 		'-m', 'pytest',
-		'--pdb',              // Drop into PDB on failure
+		'--trace',            // Start PDB at beginning of each test (allows breakpoints!)
 		'-s',                 // Don't capture stdout (allows PDB interaction)
 		'--tb=long',          // Long traceback format (shows full stack trace on failure)
 		testTarget
 	];
 
-	console.log(`[PdbSession] Starting pytest with PDB: python ${pytestArgs.join(' ')}`);
+	console.log(`[PdbSession] Starting pytest with --trace: python ${pytestArgs.join(' ')}`);
 
 	return launchPdbProcess(sessionId, pytestArgs, workingDir);
 }

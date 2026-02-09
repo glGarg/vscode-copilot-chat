@@ -259,7 +259,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			ToolName.CoreRunInTerminal,     // run_in_terminal
 			ToolName.CoreManageTodoList,    // manage_todo_list
 			// Diagnostics
-			ToolName.GetErrors,             // get_errors
+			// ToolName.GetErrors,             // get_errors
 			// Debug subagent
 			//ToolName.DebugSubagent,         // debug_subagent
 		]);

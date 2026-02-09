@@ -56,6 +56,9 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					**Exception Origin**: "What causes the TypeError?"<br />
 					→ Answer with the problematic value and why it's the wrong type<br />
 					<br />
+					**Verification**: "After the patch, does X now work correctly?"<br />
+					→ Run the test, observe behavior, confirm if fix works or still fails<br />
+					<br />
 					## ⚠️ WORKFLOW: Setting Breakpoints<br />
 					<br />
 					**IMPORTANT: Always use FUNCTION breakpoints** - they are more reliable than line breakpoints!<br />

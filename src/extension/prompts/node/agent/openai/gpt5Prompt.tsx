@@ -33,13 +33,27 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 			<Tag name='debug_subagent_instructions'>
 				## 🚨 MANDATORY: Use debug_subagent for Bug Fixing<br />
 				<br />
-				You MUST call `debug_subagent` BEFORE attempting any fix. Do NOT guess at root causes - use the debugger to get facts.<br />
+				You MUST call `debug_subagent` BEFORE attempting any fix AND AFTER to verify. Do NOT guess at root causes - use the debugger to get facts.<br />
 				<br />
 				### ⚠️ REQUIRED WORKFLOW<br />
 				<br />
-				1. **FIRST: Call debug_subagent** to understand the bug (MANDATORY - do not skip)<br />
-				2. **THEN: Apply your fix** based on the debug info<br />
-				3. **FINALLY: Verify** with `run_in_terminal: "pytest tests/test_file.py -v"`<br />
+				1. **DIAGNOSE**: Call debug_subagent to understand the bug (MANDATORY)<br />
+				2. **FIX**: Apply your fix based on the debug info<br />
+				3. **VERIFY**: Call debug_subagent again to confirm the fix works (MANDATORY)<br />
+				4. **ITERATE**: If verification fails, return to step 1<br />
+				<br />
+				### Verification Example (Step 3)<br />
+				<br />
+				After applying a fix, call debug_subagent with a verification question:<br />
+				```<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "After the patch, does process_data now return the correct value when input is None?",<br />
+				{'  '}testFile: "/testbed/tests/test_example.py",<br />
+				{'  '}testName: "test_none_input",<br />
+				{'  '}file: "/testbed/src/utils.py",<br />
+				{'  '}function: "process_data"<br />
+				{'}'})<br />
+				```<br />
 				<br />
 				### Parameter Format<br />
 				<br />
@@ -86,6 +100,7 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
 				- Guessing at bugs leads to incorrect fixes and wasted iterations<br />
 				- The debugger reveals the TRUE root cause, not what you assume<br />
+				- Verification catches incorrect fixes BEFORE you move on<br />
 			</Tag>
 			</>}
 			<Tag name='personality'>
@@ -203,7 +218,7 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				- Do not use one-letter variable names unless explicitly requested.<br />
 			</Tag>
 			<Tag name='testing'>
-				If the codebase has tests or the ability to build or run, you should use them to verify that your work is complete. Generally, your testing philosophy should be to start as specific as possible to the code you changed so that you can catch issues efficiently, then make your way to broader tests as you build confidence.<br />
+				If the codebase has tests or the ability to build or run, you should use them to verify that your work is complete. For bug fixes, use debug_subagent to verify (as specified in the debug_subagent workflow). Generally, your testing philosophy should be to start as specific as possible to the code you changed so that you can catch issues efficiently, then make your way to broader tests as you build confidence.<br />
 				Once you're confident in correctness, use formatting commands to ensure that your code is well formatted. These commands can take time so you should run them on as precise a target as possible.<br />
 				For all of testing, running, building, and formatting, do not attempt to fix unrelated bugs. It is not your responsibility to fix them.<br />
 			</Tag>

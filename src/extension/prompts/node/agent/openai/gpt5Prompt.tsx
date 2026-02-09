@@ -35,12 +35,16 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				You MUST call `debug_subagent` BEFORE attempting any fix AND AFTER to verify. Do NOT guess at root causes - use the debugger to get facts.<br />
 				<br />
-				### ⚠️ REQUIRED WORKFLOW<br />
+				### ⚠️ REQUIRED WORKFLOW - NO EXCEPTIONS<br />
 				<br />
 				1. **DIAGNOSE**: Call debug_subagent to understand the bug (MANDATORY)<br />
 				2. **FIX**: Apply your fix based on the debug info<br />
-				3. **VERIFY**: Call debug_subagent again to confirm the fix works (MANDATORY)<br />
-				4. **ITERATE**: If verification fails, return to step 1<br />
+				3. **VERIFY**: Call debug_subagent to confirm the fix works (MANDATORY - DO NOT SKIP)<br />
+				4. **ITERATE**: If verification shows the fix failed, go back to step 1 and try again<br />
+				<br />
+				⚠️ **NEVER skip verification**. NEVER assume your fix worked. ALWAYS call debug_subagent after applying a patch to confirm.<br />
+				<br />
+				⚠️ **Keep iterating** until debug_subagent confirms the test passes. Do not give up after one failed attempt.<br />
 				<br />
 				### Verification Example (Step 3)<br />
 				<br />

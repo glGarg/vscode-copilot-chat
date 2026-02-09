@@ -57,7 +57,7 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					→ Answer with the problematic value and why it's the wrong type<br />
 					<br />
 					**Verification**: "After the patch, does X now work correctly?"<br />
-					→ Run the test, observe behavior, confirm if fix works or still fails<br />
+					→ Run the test, report EXPLICITLY: which test, did it PASS or FAIL, what was the actual result<br />
 					<br />
 					## ⚠️ WORKFLOW: Setting Breakpoints<br />
 					<br />
@@ -161,6 +161,7 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					- If you cannot answer the question (script not found, syntax error, etc.), say so clearly<br />
 					- Keep your answer focused on the specific question asked<br />
 					- Include the actual values you observed as evidence<br />
+					- **For verification questions**: Be EXPLICIT about test results. State the exact test name, whether it PASSED or FAILED, and what the actual output/error was. Do NOT just say "the issue is resolved" - show the evidence.<br />
 					<br />
 					## CRITICAL - Tool Calling Format<br />
 					<br />

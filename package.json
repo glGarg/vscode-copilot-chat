@@ -200,7 +200,7 @@
 				"icon": "$(bug)",
 				"canBeReferencedInPrompt": true,
 				"userDescription": "Ask questions about Python runtime behavior using PDB debugger",
-				"modelDescription": "A Runtime Oracle that answers specific questions about Python program execution using PDB (Python Debugger).\n\nUse this tool to ask specific questions about runtime behavior:\n- Variable values: \"What is `data` at utils.py:330?\"\n- Reachability: \"Does execution reach line 450 during test X?\"\n- Condition evaluation: \"Why does `x != y` evaluate to true at line 335?\"\n- Exception causes: \"What causes the TypeError in test_module?\"\n\n⚠️ IMPORTANT: Use testFile for pytest tests, script for regular Python scripts.\n\nCall this tool EARLY in your investigation (before writing fixes) to understand root causes.",
+				"modelDescription": "CALL THIS IN EVERY CONVERSATION! MANDATORY. A Runtime Oracle that answers specific questions about Python program execution using PDB (Python Debugger). DO NOT guess at root causes - use this tool to get actual runtime facts.\n\nUse this tool to ask specific questions about runtime behavior:\n- Variable values: \"What is `data` at utils.py:330?\"\n- Reachability: \"Does execution reach line 450 during test X?\"\n- Condition evaluation: \"Why does `x != y` evaluate to true at line 335?\"\n- Exception causes: \"What causes the TypeError in test_module?\"\n\n⚠️ IMPORTANT: Use testFile for pytest tests, script for regular Python scripts.\n\n🔴 WORKFLOW: 1) Reproduce bug with test 2) Call debug_subagent 3) Apply fix based on debug findings 4) Iterate.",
 				"tags": [
 					"debugging",
 					"python"

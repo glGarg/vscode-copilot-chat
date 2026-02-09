@@ -247,7 +247,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 				// Found a proper debug answer
 				subagentResponse = debugAnswer;
 			} else {
-				// No <debug_answer> found - the subagent hit the tool limit without providing an answer
+				// No <debug_answer> tags found - check if the response still contains useful debug info
 				const lastResponse = loopResult.toolCallRounds.at(-1)?.response ?? loopResult.round.response ?? '';
 				
 				// Check if the model was confused and tried to use wrong tool calling format
@@ -256,7 +256,15 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 				if (hasMalformedToolCall) {
 					subagentResponse = `[Debug subagent encountered a tool calling format error]\n\nThe subagent attempted to call tools using an incorrect format (<function=...>) instead of using the native tool calling mechanism. This is a model behavior issue.\n\nPlease try debugging manually or analyze the code directly.`;
 				} else {
-					subagentResponse = `[Debug subagent reached tool limit without providing a structured answer]\n\nLast response from subagent:\n${lastResponse}\n\nNote: The subagent may have gathered useful information but did not provide a final conclusion. You may need to analyze the code directly or try debugging again with a more specific question.`;
+					// Check if the response contains useful debug information (Answer/Evidence patterns)
+					const hasUsefulContent = lastResponse.includes('**Answer**:') || lastResponse.includes('**Evidence**:');
+					
+					if (hasUsefulContent) {
+						// The subagent provided useful debugging information, just not in the expected format
+						subagentResponse = lastResponse;
+					} else {
+						subagentResponse = `[Debug subagent did not find conclusive information]\n\nLast response from subagent:\n${lastResponse}\n\nThe subagent investigated but could not reach a definitive conclusion. Consider refining the question or debugging manually.`;
+					}
 				}
 			}
 		} else {

@@ -254,7 +254,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			// File editing
 			ToolName.CreateFile,            // create_file
 			ToolName.ReplaceString,         // replace_string_in_file
-			// ToolName.MultiReplaceString,    // multi_replace_string_in_file
+			ToolName.MultiReplaceString,    // multi_replace_string_in_file
 			// Terminal and planning
 			ToolName.CoreRunInTerminal,     // run_in_terminal
 			ToolName.CoreManageTodoList,    // manage_todo_list

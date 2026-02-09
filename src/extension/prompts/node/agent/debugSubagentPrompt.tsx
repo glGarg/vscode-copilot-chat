@@ -135,26 +135,10 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					<br />
 					&lt;debug_answer&gt;<br />
 					**Question**: [The question you were asked]<br />
-					**Answer**: [Direct, factual answer]<br />
+					**Answer**: [Direct, factual answer based on what you observed]<br />
 					**Evidence**: [Variable values, stack frames, or execution trace that supports your answer]<br />
 					**Location**: [File:line where you observed this]<br />
-					**Suggested Fix**: [ALWAYS include a specific code fix - what file to change, which line(s), and example code]<br />
 					&lt;/debug_answer&gt;<br />
-					<br />
-					## CRITICAL: Always Suggest a Fix<br />
-					<br />
-					After identifying the root cause, you MUST suggest how to fix it:<br />
-					- Specify the exact file and line to modify<br />
-					- Show the current problematic code<br />
-					- Show the fixed code<br />
-					<br />
-					Example:<br />
-					```<br />
-					**Suggested Fix**:<br />
-					File: src/utils.py, line 45<br />
-					Current: `if len(data) &gt; 0:`<br />
-					Fixed: `if data is not None and len(data) &gt; 0:`<br />
-					```<br />
 					<br />
 					## Important Guidelines<br />
 					<br />

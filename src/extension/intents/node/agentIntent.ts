@@ -242,24 +242,26 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			return [];
 		}
 
-		// Only provide essential tools for bug fixing - smaller set makes debug_subagent more prominent
+		// Full toolset for bug fixing
 		const allowedTools = new Set([
-			// The debug subagent - MUST be run
-			// ToolName.DebugSubagent,
-			// Context gathering
-			ToolName.ReadFile,
-			// ToolName.FindFiles,
-			// ToolName.FindTextInFiles,
-			ToolName.ListDirectory,
-			// Editing - ApplyPatch is primary for GPT-5
-			ToolName.ApplyPatch,
-			// ToolName.ReplaceString,
-			ToolName.CreateFile,
-			// ToolName.EditFile,
-			// Terminal for building/testing
-			ToolName.CoreRunInTerminal,
-			// Planning
-			ToolName.CoreManageTodoList,
+			// Search and context gathering
+			// ToolName.Codebase,              // semantic_search
+			ToolName.FindTextInFiles,       // grep_search
+			ToolName.ReadFile,              // read_file
+			ToolName.FindFiles,             // file_search
+			ToolName.ApplyPatch,        // search_subagent
+			ToolName.ListDirectory,         // list_dir
+			// File editing
+			ToolName.CreateFile,            // create_file
+			ToolName.ReplaceString,         // replace_string_in_file
+			ToolName.MultiReplaceString,    // multi_replace_string_in_file
+			// Terminal and planning
+			ToolName.CoreRunInTerminal,     // run_in_terminal
+			ToolName.CoreManageTodoList,    // manage_todo_list
+			// Diagnostics
+			ToolName.GetErrors,             // get_errors
+			// Debug subagent
+			//ToolName.DebugSubagent,         // debug_subagent
 		]);
 
 		return allTools.filter(tool => allowedTools.has(tool.name as ToolName));

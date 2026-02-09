@@ -120,6 +120,16 @@ export class DebugSubagentPrompt extends PromptElement<GenericBasePromptElementP
 					- **debug_control**: Control execution (action: continue, step_into, step_over, step_out, until, jump, quit)<br />
 					- **debug_threads**: Navigate stack frames (action: up, down, where)<br />
 					- **read_file**: Read source code to understand context<br />
+					- **create_file**: Create new files (⚠️ RESTRICTED - repro/test scripts only)<br />
+					- **apply_patch**: Edit files (⚠️ RESTRICTED - repro/test scripts only)<br />
+					<br />
+					## ⚠️ File Editing Restrictions<br />
+					<br />
+					You can ONLY use create_file and apply_patch to create/modify:<br />
+					- **Reproduction scripts** (e.g., /testbed/repro.py, /testbed/debug_issue.py)<br />
+					- **Test scripts** (files in /tests/, /test/, or named test_*.py)<br />
+					<br />
+					You MUST NOT modify source code files. Your role is to observe and report facts.<br />
 					<br />
 					## PDB-Specific Features<br />
 					<br />

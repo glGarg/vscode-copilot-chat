@@ -210,6 +210,12 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 
 	private _resolvedCustomizations: AgentPromptCustomizations | undefined;
 
+	// Track the current prompt context for tool filtering
+	private _currentPromptContext: IBuildPromptContext | undefined;
+
+	// Maximum number of times debug_subagent can be called
+	private static readonly DEBUG_SUBAGENT_MAX_CALLS = 2;
+
 	constructor(
 		intent: IIntent,
 		location: ChatLocation,
@@ -233,6 +239,25 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		super(intent, location, endpoint, request, intentOptions, instantiationService, codeMapperService, envService, promptPathRepresentationService, endpointProvider, workspaceService, toolsService, configurationService, editLogService, commandService, telemetryService, notebookService);
 	}
 
+	/**
+	 * Count how many times debug_subagent has been called in the current conversation
+	 */
+	private countDebugSubagentCalls(): number {
+		if (!this._currentPromptContext?.toolCallRounds) {
+			return 0;
+		}
+		
+		let count = 0;
+		for (const round of this._currentPromptContext.toolCallRounds) {
+			for (const call of round.toolCalls) {
+				if (call.name === ToolName.DebugSubagent) {
+					count++;
+				}
+			}
+		}
+		return count;
+	}
+
 	public override async getAvailableTools(): Promise<vscode.LanguageModelToolInformation[]> {
 		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.request);
 		
@@ -240,6 +265,14 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		if (!allTools) {
 			console.error('[AgentIntent] getAgentTools returned undefined/null');
 			return [];
+		}
+		
+		// Check if debug_subagent has been called too many times
+		const debugSubagentCallCount = this.countDebugSubagentCalls();
+		const debugSubagentLimitReached = debugSubagentCallCount >= AgentIntentInvocation.DEBUG_SUBAGENT_MAX_CALLS;
+		
+		if (debugSubagentLimitReached) {
+			this.logService.debug(`[AgentIntent] debug_subagent limit reached (${debugSubagentCallCount}/${AgentIntentInvocation.DEBUG_SUBAGENT_MAX_CALLS}), removing from available tools`);
 		}
 		
 		// Full toolset for bug fixing
@@ -260,8 +293,8 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			ToolName.CoreManageTodoList,    // manage_todo_list
 			// Diagnostics
 			// ToolName.GetErrors,             // get_errors
-			// Debug subagent
-			ToolName.DebugSubagent,         // debug_subagent
+			// Debug subagent - only include if limit not reached
+			...(debugSubagentLimitReached ? [] : [ToolName.DebugSubagent]),
 		]);
 
 		return allTools.filter(tool => allowedTools.has(tool.name as ToolName));
@@ -272,6 +305,9 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		progress: vscode.Progress<vscode.ChatResponseReferencePart | vscode.ChatResponseProgressPart>,
 		token: vscode.CancellationToken
 	): Promise<IBuildPromptResult> {
+		// Store current prompt context for use in getAvailableTools (needed for debug_subagent limit)
+		this._currentPromptContext = promptContext;
+		
 		this._resolvedCustomizations = await PromptRegistry.resolveAllCustomizations(this.instantiationService, this.endpoint);
 		// Add any references from the codebase invocation to the request
 		const codebase = await this._getCodebaseReferences(promptContext, token);

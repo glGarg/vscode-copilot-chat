@@ -36,10 +36,14 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				You MUST call `debug_subagent` BEFORE attempting any fix. Do NOT guess at root causes - use the debugger to get facts.<br />
 				<br />
+				### ⛔ EDIT TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
+				<br />
+				The edit tools (`replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`) are NOT available until you have completed root cause analysis using `debug_subagent`. You can still use `create_file` to write reproduction scripts.<br />
+				<br />
 				### ⚠️ REQUIRED WORKFLOW<br />
 				<br />
 				1. **FIRST: Call debug_subagent** to understand the bug (MANDATORY - do not skip)<br />
-				2. **THEN: Apply your fix** based on the debug info<br />
+				2. **THEN: Apply your fix** based on the debug info (edit tools become available after debugging)<br />
 				3. **FINALLY: Verify** with `run_in_terminal: "pytest tests/test_file.py -v"`<br />
 				<br />
 				### Parameter Format<br />

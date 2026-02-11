@@ -267,7 +267,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		const debugSubagentCalled = this.hasCalledDebugSubagent();
 		
 		if (!debugSubagentCalled) {
-			this.logService.debug(`[AgentIntent] debug_subagent not yet called, edit tools are disabled`);
+			this.logService.debug(`[AgentIntent] debug_subagent not yet called, edit and terminal tools are disabled`);
 		}
 		
 		// Full toolset for bug fixing
@@ -284,8 +284,9 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			...(debugSubagentCalled ? [ToolName.ApplyPatch] : []),            // apply_patch
 			...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
 			...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
-			// Terminal and planning
-			ToolName.CoreRunInTerminal,     // run_in_terminal
+			// Terminal - only available after debug_subagent has been called
+			...(debugSubagentCalled ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
+			// Planning
 			ToolName.CoreManageTodoList,    // manage_todo_list
 			// Diagnostics
 			// ToolName.GetErrors,             // get_errors

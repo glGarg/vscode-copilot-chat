@@ -94,7 +94,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 	private static NextToolCallId = Date.now();
 
 	private toolCallResults: Record<string, LanguageModelToolResult2> = Object.create(null);
-	private toolCallRounds: IToolCallRound[] = [];
+	protected toolCallRounds: IToolCallRound[] = [];
 
 	private readonly _onDidBuildPrompt = this._register(new Emitter<{ result: IBuildPromptResult; tools: LanguageModelToolInformation[]; promptTokenLength: number }>());
 	public readonly onDidBuildPrompt = this._onDidBuildPrompt.event;

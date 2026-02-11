@@ -712,6 +712,10 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	}
 
 	protected override async getAvailableTools(outputStream: ChatResponseStream | undefined, token: CancellationToken): Promise<LanguageModelToolInformation[]> {
+		// Update the invocation with current toolCallRounds BEFORE calling getAvailableTools
+		// This is needed for debug_subagent call limit checking
+		(this.options.invocation as { setToolCallRounds?: (rounds: IToolCallRound[]) => void }).setToolCallRounds?.(this.toolCallRounds);
+		
 		const tools = await this.options.invocation.getAvailableTools?.() ?? [];
 		if (this.toolGrouping) {
 			this.toolGrouping.tools = tools;

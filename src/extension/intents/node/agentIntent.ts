@@ -31,7 +31,7 @@ import { ICommandService } from '../../commands/node/commandService';
 import { Intent } from '../../common/constants';
 import { ChatVariablesCollection } from '../../prompt/common/chatVariablesCollection';
 import { Conversation, RenderedUserMessageMetadata } from '../../prompt/common/conversation';
-import { IBuildPromptContext } from '../../prompt/common/intents';
+import { IBuildPromptContext, IToolCallRound } from '../../prompt/common/intents';
 import { getRequestedToolCallIterationLimit, IContinueOnErrorConfirmation } from '../../prompt/common/specialRequestTypes';
 import { ChatTelemetryBuilder } from '../../prompt/node/chatParticipantTelemetry';
 import { IDefaultIntentRequestHandlerOptions } from '../../prompt/node/defaultIntentRequestHandler';
@@ -210,8 +210,9 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 
 	private _resolvedCustomizations: AgentPromptCustomizations | undefined;
 
-	// Track the current prompt context for tool filtering
-	private _currentPromptContext: IBuildPromptContext | undefined;
+	// Track toolCallRounds for debug_subagent limit checking
+	// This is set by the tool calling loop BEFORE getAvailableTools is called
+	private _toolCallRounds: readonly IToolCallRound[] | undefined;
 
 	// Maximum number of times debug_subagent can be called
 	private static readonly DEBUG_SUBAGENT_MAX_CALLS = 2;
@@ -240,15 +241,23 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 	}
 
 	/**
+	 * Set the current toolCallRounds for debug_subagent limit checking.
+	 * Called by the tool calling loop BEFORE getAvailableTools.
+	 */
+	public setToolCallRounds(rounds: readonly IToolCallRound[]): void {
+		this._toolCallRounds = rounds;
+	}
+
+	/**
 	 * Count how many times debug_subagent has been called in the current conversation
 	 */
 	private countDebugSubagentCalls(): number {
-		if (!this._currentPromptContext?.toolCallRounds) {
+		if (!this._toolCallRounds) {
 			return 0;
 		}
 		
 		let count = 0;
-		for (const round of this._currentPromptContext.toolCallRounds) {
+		for (const round of this._toolCallRounds) {
 			for (const call of round.toolCalls) {
 				if (call.name === ToolName.DebugSubagent) {
 					count++;
@@ -305,9 +314,6 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		progress: vscode.Progress<vscode.ChatResponseReferencePart | vscode.ChatResponseProgressPart>,
 		token: vscode.CancellationToken
 	): Promise<IBuildPromptResult> {
-		// Store current prompt context for use in getAvailableTools (needed for debug_subagent limit)
-		this._currentPromptContext = promptContext;
-		
 		this._resolvedCustomizations = await PromptRegistry.resolveAllCustomizations(this.instantiationService, this.endpoint);
 		// Add any references from the codebase invocation to the request
 		const codebase = await this._getCodebaseReferences(promptContext, token);

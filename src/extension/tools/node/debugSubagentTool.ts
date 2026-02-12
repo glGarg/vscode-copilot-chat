@@ -165,11 +165,6 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			ToolName.FindFiles,
 			ToolName.FindTextInFiles,
 			ToolName.ListDirectory,
-			// File editing - full capabilities for fixing issues
-			ToolName.CreateFile,
-			ToolName.ApplyPatch,
-			ToolName.ReplaceString,
-			ToolName.EditFile,
 		]);
 
 		const loop = this.instantiationService.createInstance(SubagentToolCallingLoop, {

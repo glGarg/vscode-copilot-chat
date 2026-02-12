@@ -210,6 +210,9 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 
 	private _resolvedCustomizations: AgentPromptCustomizations | undefined;
 
+	// Track the current prompt context for tool filtering
+	private _currentPromptContext: IBuildPromptContext | undefined;
+
 	constructor(
 		intent: IIntent,
 		location: ChatLocation,
@@ -233,27 +236,53 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		super(intent, location, endpoint, request, intentOptions, instantiationService, codeMapperService, envService, promptPathRepresentationService, endpointProvider, workspaceService, toolsService, configurationService, editLogService, commandService, telemetryService, notebookService);
 	}
 
+	/**
+	 * Check if debug_subagent has been called at least once in the current conversation
+	 */
+	private hasCalledDebugSubagent(): boolean {
+		if (!this._currentPromptContext?.toolCallRounds) {
+			return false;
+		}
+		
+		for (const round of this._currentPromptContext.toolCallRounds) {
+			for (const call of round.toolCalls) {
+				if (call.name === ToolName.DebugSubagent) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	public override async getAvailableTools(): Promise<vscode.LanguageModelToolInformation[]> {
 		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.request);
 		
-		// Only provide essential tools for bug fixing - smaller set makes debug_subagent more prominent
+		// Check if debug_subagent has been called - edit and terminal tools are gated until it's called
+		const debugSubagentCalled = this.hasCalledDebugSubagent();
+		
+		if (!debugSubagentCalled) {
+			this.logService.debug(`[AgentIntent] debug_subagent not yet called, edit and terminal tools are disabled`);
+		}
+		
+		// Full toolset for bug fixing
 		const allowedTools = new Set([
 			// The debug subagent - MUST be run
 			ToolName.DebugSubagent,
-			// Context gathering
+			// Search and context gathering
 			ToolName.ReadFile,
-			// ToolName.FindFiles,
-			// ToolName.FindTextInFiles,
-			ToolName.ListDir,
-			// Editing - ApplyPatch is primary for GPT-5
-			ToolName.ApplyPatch,
-			// ToolName.ReplaceString,
-			ToolName.CreateFile,
-			// ToolName.EditFile,
-			// Terminal for building/testing
-			ToolName.CoreRunInTerminal,
+			ToolName.FindTextInFiles,       // grep_search
+			ToolName.FindFiles,             // file_search
+			ToolName.ListDir,         // list_dir
+			// File editing - create_file always allowed for repro scripts
+			ToolName.CreateFile,            // create_file
+			// Edit tools - only available after debug_subagent has been called
+			// ...(debugSubagentCalled ? [ToolName.ApplyPatch] : []),            // apply_patch
+			...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
+			...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
+			// Terminal - only available after debug_subagent has been called
+			...(debugSubagentCalled ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
 			// Planning
-			ToolName.CoreManageTodoList,
+			ToolName.CoreManageTodoList,    // manage_todo_list
 		]);
 		
 		return allTools.filter(tool => allowedTools.has(tool.name as ToolName));
@@ -264,6 +293,9 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		progress: vscode.Progress<vscode.ChatResponseReferencePart | vscode.ChatResponseProgressPart>,
 		token: vscode.CancellationToken
 	): Promise<IBuildPromptResult> {
+		// Store current prompt context for use in getAvailableTools (needed for debug_subagent gating)
+		this._currentPromptContext = promptContext;
+		
 		this._resolvedCustomizations = await PromptRegistry.resolveAllCustomizations(this.instantiationService, this.endpoint);
 		// Add any references from the codebase invocation to the request
 		const codebase = await this._getCodebaseReferences(promptContext, token);

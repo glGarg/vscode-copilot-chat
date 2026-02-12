@@ -94,7 +94,7 @@ export const getAgentTools = async (accessor: ServicesAccessor, request: vscode.
 	allowTools[ToolName.CoreRunTask] = tasksService.getTasks().length > 0;
 
 	// Always enable the debug subagent tool regardless of tool picker state
-	allowTools[ToolName.DebugSubagent] = true;
+	allowTools[ToolName.DebugSubagent] = false;
 
 	if (model.family.includes('grok-code')) {
 		allowTools[ToolName.CoreManageTodoList] = false;
@@ -258,7 +258,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.request);
 		
 		// Check if debug_subagent has been called - edit and terminal tools are gated until it's called
-		const debugSubagentCalled = this.hasCalledDebugSubagent();
+		const debugSubagentCalled = true;//this.hasCalledDebugSubagent();
 		
 		if (!debugSubagentCalled) {
 			this.logService.debug(`[AgentIntent] debug_subagent not yet called, edit and terminal tools are disabled`);
@@ -267,7 +267,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		// Full toolset for bug fixing
 		const allowedTools = new Set([
 			// The debug subagent - MUST be run
-			ToolName.DebugSubagent,
+			// ToolName.DebugSubagent,
 			// Search and context gathering
 			ToolName.ReadFile,
 			ToolName.FindTextInFiles,       // grep_search

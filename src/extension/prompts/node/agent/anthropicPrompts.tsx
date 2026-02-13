@@ -37,6 +37,73 @@ class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps>
 				{tools[ToolName.CoreRunInTerminal] && <>NEVER print out a codeblock with a terminal command to run unless the user asked for it. Use the {ToolName.CoreRunInTerminal} tool instead.<br /></>}
 				You don't need to read a file if it's already provided in context.
 			</Tag>
+			{tools[ToolName.DebugSubagent] && <>
+			<Tag name='debug_subagent_instructions'>
+				## 🚨 MANDATORY: Use debug_subagent for Bug Fixing<br />
+				<br />
+				You MUST call `debug_subagent` BEFORE attempting any fix. Do NOT guess at root causes - use the debugger to get facts.<br />
+				<br />
+				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
+				<br />
+				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
+				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
+				- Terminal: `run_in_terminal`<br />
+				<br />
+				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
+				<br />
+				### ⚠️ REQUIRED WORKFLOW<br />
+				<br />
+				1. **FIRST: Call debug_subagent** to understand the bug (MANDATORY - do not skip)<br />
+				2. **THEN: Apply your fix** based on the debug info (edit and terminal tools become available after debugging)<br />
+				3. **FINALLY: Verify** with `run_in_terminal: "pytest tests/test_file.py -v"`<br />
+				<br />
+				### Parameter Format<br />
+				<br />
+				The `function` parameter is **REQUIRED** - specify which function/method to debug.<br />
+				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
+				**ALWAYS use ABSOLUTE paths** (starting with `/`) for all file parameters.<br />
+				<br />
+				**For PYTEST tests** (use existing test files):<br />
+				```<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "What causes the TypeError?",<br />
+				{'  '}testFile: "/testbed/tests/test_example.py",  // ABSOLUTE path to test<br />
+				{'  '}testName: "test_my_function",                // Optional: specific test<br />
+				{'  '}file: "/testbed/src/utils.py",               // ABSOLUTE path to file<br />
+				{'  '}function: "process_data",                    // REQUIRED: function to debug<br />
+				{'  '}line: 42                                     // Optional: specific line<br />
+				{'}'})<br />
+				```<br />
+				<br />
+				**For custom SCRIPTS** (when you need a reproduction script):<br />
+				```<br />
+				// STEP 1: First CREATE the script<br />
+				create_file({'{'}path: "/testbed/repro.py", content: "..."{'}'})<br />
+				<br />
+				// STEP 2: Then call debug_subagent with the script<br />
+				debug_subagent({'{'}<br />
+				{'  '}question: "What is x at line 10?",<br />
+				{'  '}script: "/testbed/repro.py",             // ABSOLUTE path to script you created<br />
+				{'  '}file: "/testbed/src/module.py",          // ABSOLUTE path to file<br />
+				{'  '}function: "MyClass.validate",            // REQUIRED: function to debug<br />
+				{'  '}line: 50                                 // Optional: specific line<br />
+				{'}'})<br />
+				```<br />
+				<br />
+				### ⚠️ IMPORTANT: Create Scripts Before Debugging<br />
+				<br />
+				If you need a reproduction script, you MUST:<br />
+				1. **CREATE** the script file first using `create_file`<br />
+				2. **THEN** call `debug_subagent` with the script path<br />
+				<br />
+				Do NOT pass script paths that don't exist yet!<br />
+				<br />
+				### Why This is Required<br />
+				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
+				- Guessing at bugs leads to incorrect fixes and wasted iterations<br />
+				- The debugger reveals the TRUE root cause, not what you assume<br />
+			</Tag>
+			</>}
 			<Tag name='toolUseInstructions'>
 				If the user is requesting a code sample, you can answer it directly without using any tools.<br />
 				When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.<br />
@@ -116,6 +183,7 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 			<Tag name='instructions'>
 				You are a highly sophisticated automated coding agent with expert-level knowledge across many different programming languages and frameworks and software engineering tasks - this encompasses debugging issues, implementing new features, restructuring code, and providing code explanations, among other engineering activities.<br />
 				The user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.<br />
+				{tools[ToolName.DebugSubagent] && <>For Python bugs, use {ToolName.DebugSubagent} to ask specific questions about runtime behavior EARLY in your investigation. Use `testFile` for pytest tests, `script` for regular Python scripts. Call it with a specific question like "What is `data` at line 330?" rather than broad tasks. The subagent will set breakpoints, run the script/test, and return factual answers about variable values, execution paths, and exception causes.<br /></>}
 				By default, implement changes rather than only suggesting them. If the user's intent is unclear, infer the most useful likely action and proceed with using tools to discover any missing details instead of guessing. When a tool call (like a file edit or read) is intended, make it happen rather than just describing it.<br />
 				You can call tools repeatedly to take actions or gather as much context as needed until you have completed the task fully. Don't give up unless you are sure the request cannot be fulfilled with the tools you have. It's YOUR RESPONSIBILITY to make sure that you have done all you can to collect necessary context.<br />
 				Continue working until the user's request is completely resolved before ending your turn and yielding back to the user. Only terminate your turn when you are certain the task is complete. Do not stop or hand back to the user when you encounter uncertainty — research or deduce the most reasonable approach and continue.<br />
@@ -151,36 +219,60 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				You MUST call `debug_subagent` BEFORE attempting any fix. Do NOT guess at root causes - use the debugger to get facts.<br />
 				<br />
+				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
+				<br />
+				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
+				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
+				- Terminal: `run_in_terminal`<br />
+				<br />
+				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
+				<br />
 				### ⚠️ REQUIRED WORKFLOW<br />
 				<br />
 				1. **FIRST: Call debug_subagent** to understand the bug (MANDATORY - do not skip)<br />
-				2. **THEN: Apply your fix** based on the debug info<br />
+				2. **THEN: Apply your fix** based on the debug info (edit and terminal tools become available after debugging)<br />
 				3. **FINALLY: Verify** with `run_in_terminal: "pytest tests/test_file.py -v"`<br />
 				<br />
 				### Parameter Format<br />
 				<br />
+				The `function` parameter is **REQUIRED** - specify which function/method to debug.<br />
 				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
+				**ALWAYS use ABSOLUTE paths** (starting with `/`) for all file parameters.<br />
 				<br />
-				**For PYTEST tests:**<br />
+				**For PYTEST tests** (use existing test files):<br />
 				```<br />
 				debug_subagent({'{'}<br />
 				{'  '}question: "What causes the TypeError?",<br />
-				{'  '}testFile: "tests/test_example.py",      // Test file to run<br />
-				{'  '}testName: "test_my_function",           // Optional: specific test<br />
-				{'  '}file: "src/utils.py",                   // Optional: breakpoint file<br />
-				{'  '}line: 42                                // Optional: breakpoint line<br />
+				{'  '}testFile: "/testbed/tests/test_example.py",  // ABSOLUTE path to test<br />
+				{'  '}testName: "test_my_function",                // Optional: specific test<br />
+				{'  '}file: "/testbed/src/utils.py",               // ABSOLUTE path to file<br />
+				{'  '}function: "process_data",                    // REQUIRED: function to debug<br />
+				{'  '}line: 42                                     // Optional: specific line<br />
 				{'}'})<br />
 				```<br />
 				<br />
-				**For regular SCRIPTS:**<br />
+				**For custom SCRIPTS** (when you need a reproduction script):<br />
 				```<br />
+				// STEP 1: First CREATE the script<br />
+				create_file({'{'}path: "/testbed/repro.py", content: "..."{'}'})<br />
+				<br />
+				// STEP 2: Then call debug_subagent with the script<br />
 				debug_subagent({'{'}<br />
-				{'  '}question: "What is x at line 50?",<br />
-				{'  '}script: "main.py",                      // Script to run<br />
-				{'  '}file: "main.py",                        // Breakpoint file<br />
-				{'  '}line: 50                                // Breakpoint line<br />
+				{'  '}question: "What is x at line 10?",<br />
+				{'  '}script: "/testbed/repro.py",             // ABSOLUTE path to script you created<br />
+				{'  '}file: "/testbed/src/module.py",          // ABSOLUTE path to file<br />
+				{'  '}function: "MyClass.validate",            // REQUIRED: function to debug<br />
+				{'  '}line: 50                                 // Optional: specific line<br />
 				{'}'})<br />
 				```<br />
+				<br />
+				### ⚠️ IMPORTANT: Create Scripts Before Debugging<br />
+				<br />
+				If you need a reproduction script, you MUST:<br />
+				1. **CREATE** the script file first using `create_file`<br />
+				2. **THEN** call `debug_subagent` with the script path<br />
+				<br />
+				Do NOT pass script paths that don't exist yet!<br />
 				<br />
 				### Why This is Required<br />
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />

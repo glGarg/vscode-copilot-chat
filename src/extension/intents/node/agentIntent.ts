@@ -276,8 +276,8 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			ToolName.CreateFile,            // create_file
 			// Edit tools - only available after debug_subagent has been called
 			...(debugSubagentCalled ? [ToolName.ApplyPatch] : []),            // apply_patch
-			...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
-			...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
+			//...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
+			//...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
 			// Terminal - only available after debug_subagent has been called
 			...(debugSubagentCalled ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
 			// Planning

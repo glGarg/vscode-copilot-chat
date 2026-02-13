@@ -270,8 +270,8 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			ToolName.DebugSubagent,
 			// Search and context gathering
 			ToolName.ReadFile,
-			ToolName.FindTextInFiles,       // grep_search
-			ToolName.FindFiles,             // file_search
+			//ToolName.FindTextInFiles,       // grep_search
+			//ToolName.FindFiles,             // file_search
 			ToolName.ListDir,         // list_dir
 			// File editing - create_file always allowed for repro scripts
 			ToolName.CreateFile,            // create_file

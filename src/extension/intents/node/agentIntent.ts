@@ -280,7 +280,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			//...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
 			//...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
 			// Terminal - only available after debug_subagent has been called
-			...(debugSubagentCalled ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
+			...(true ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
 			// Planning
 			ToolName.CoreManageTodoList,    // manage_todo_list
 		]);

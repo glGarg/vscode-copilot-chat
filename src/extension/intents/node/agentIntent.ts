@@ -258,10 +258,10 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.request);
 		
 		// Safety check - if allTools is undefined/null, return empty array
-		if (!allTools) {
-			console.error('[AgentIntent] getAgentTools returned undefined/null');
-			return [];
-		}
+		//if (!allTools) {
+		//	console.error('[AgentIntent] getAgentTools returned undefined/null');
+		//	return [];
+		//}
 		
 		// Check if debug_subagent has been called - edit tools are gated until it's called
 		const debugSubagentCalled = this.hasCalledDebugSubagent();
@@ -277,7 +277,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			ToolName.FindTextInFiles,       // grep_search
 			ToolName.ReadFile,              // read_file
 			ToolName.FindFiles,             // file_search
-			ToolName.ListDirectory,         // list_dir
+			ToolName.ListDir,         // list_dir
 			// File editing - create_file always allowed for repro scripts
 			ToolName.CreateFile,            // create_file
 			// Edit tools - only available after debug_subagent has been called

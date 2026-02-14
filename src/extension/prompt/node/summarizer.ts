@@ -34,7 +34,7 @@ export class ChatSummarizerProvider implements vscode.ChatSummarizer {
 			return '';
 		}
 
-		const endpoint = await this.endpointProvider.getChatEndpoint('copilot-fast');
+		const endpoint = await this.endpointProvider.getChatEndpoint('gpt-5');
 		const promptContext: IBuildPromptContext = {
 			requestId: 'chat-summary',
 			query: '',

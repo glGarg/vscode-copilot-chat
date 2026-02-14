@@ -125,7 +125,7 @@ export class LanguageModelAccess extends Disposable implements IExtensionContrib
 		}
 		if (!defaultChatEndpoint) {
 			// Find a default set by CAPI
-			defaultChatEndpoint = chatEndpoints.find(e => e.isDefault) ?? await this._endpointProvider.getChatEndpoint('gpt-4.1') ?? chatEndpoints[0];
+			defaultChatEndpoint = chatEndpoints.find(e => e.isDefault) ?? await this._endpointProvider.getChatEndpoint('copilot-base') ?? chatEndpoints[0];
 		}
 		const seenFamilies = new Set<string>();
 
@@ -233,7 +233,12 @@ export class LanguageModelAccess extends Disposable implements IExtensionContrib
 		progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
 		token: vscode.CancellationToken
 	): Promise<void> {
-		const endpoint = this._chatEndpoints.find(e => e.model === ModelAliasRegistry.resolveAlias(model.id));
+		let resolvedModelId = ModelAliasRegistry.resolveAlias(model.id);
+		// Redirect gpt-4o-mini to gpt-5 to avoid 403 errors when integration has limited model access
+		if (resolvedModelId === 'gpt-4o-mini' || resolvedModelId === 'gpt-4o-mini-2024-07-18') {
+			resolvedModelId = 'gpt-5';
+		}
+		const endpoint = this._chatEndpoints.find(e => e.model === resolvedModelId);
 		if (!endpoint) {
 			throw new Error(`Endpoint not found for model ${model.id}`);
 		}

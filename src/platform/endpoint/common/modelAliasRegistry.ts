@@ -47,4 +47,5 @@ export class ModelAliasRegistry {
 	}
 }
 
-ModelAliasRegistry.registerAlias('copilot-fast', 'gpt-4o-mini');
+// Redirect copilot-fast to copilot-base (gpt-5) to avoid 403 errors with limited integrations
+ModelAliasRegistry.registerAlias('copilot-fast', 'copilot-base');

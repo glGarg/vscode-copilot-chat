@@ -12,6 +12,16 @@ import { ProductionEndpointProvider } from './endpointProviderImpl';
 
 export class ScenarioAutomationEndpointProviderImpl extends ProductionEndpointProvider {
 	override async getChatEndpoint(requestOrFamilyOrModel: LanguageModelChat | ChatRequest | ChatEndpointFamily): Promise<IChatEndpoint> {
+		// Redirect restricted model families to copilot-base (gpt-5) to avoid 403 errors
+		// when the integration only has access to certain models
+		if (typeof requestOrFamilyOrModel === 'string') {
+			const restrictedFamilies = ['copilot-fast', 'gpt-4.1', 'gpt-5-mini'];
+			if (restrictedFamilies.includes(requestOrFamilyOrModel)) {
+				this._logService.trace(`ScenarioAutomation: Redirecting family '${requestOrFamilyOrModel}' to gpt-5`);
+				return super.getChatEndpoint('gpt-5');
+			}
+		}
+
 		const isProxyingCAPI = !!this._configService.getConfig(ConfigKey.Shared.DebugOverrideCAPIUrl) || !!this._configService.getConfig(ConfigKey.Shared.DebugOverrideProxyUrl);
 		if (this._authService.copilotToken?.isNoAuthUser && !isProxyingCAPI) {
 			// When using no auth in scenario automation, we want to force using a custom model / non-copilot for all requests

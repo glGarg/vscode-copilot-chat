@@ -173,6 +173,10 @@ export class ModelMetadataFetcher extends Disposable implements IModelMetadataFe
 		} else {
 			resolvedModel = this._familyMap.get(family)?.[0];
 		}
+		// Fallback to copilot-base (gpt-5) if the requested model family is not available
+		if (!resolvedModel || !isChatModelInformation(resolvedModel)) {
+			resolvedModel = this._copilotBaseModel;
+		}
 		if (!resolvedModel || !isChatModelInformation(resolvedModel)) {
 			throw new Error(`Unable to resolve chat model with family selection: ${family}`);
 		}

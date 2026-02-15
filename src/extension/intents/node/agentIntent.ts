@@ -288,6 +288,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			...(debugSubagentCalled ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
 			// Planning
 			ToolName.CoreManageTodoList,    // manage_todo_list
+			ToolName.GetErrors,
 		]);
 		
 		return allTools.filter(tool => allowedTools.has(tool.name as ToolName));

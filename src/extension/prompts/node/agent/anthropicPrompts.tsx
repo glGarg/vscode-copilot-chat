@@ -25,21 +25,6 @@ class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps>
 				The user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
 				{tools[ToolName.DebugSubagent] && <>For Java bugs, use {ToolName.DebugSubagent} to ask specific questions about runtime behavior EARLY in your investigation. Call it with a specific question like "What is `listType` at line 330?" rather than broad tasks. The subagent will set breakpoints, run the test, and return factual answers about variable values, execution paths, and exception causes.<br /></>}
-				{tools[ToolName.DebugSubagent] && <>
-				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
-				<br />
-				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
-				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
-				- Terminal: `run_in_terminal`<br />
-				<br />
-				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
-				<br />
-				### ⚠️ REQUIRED WORKFLOW<br />
-				<br />
-				1. **FIRST: Call debug_subagent** to understand the bug (MANDATORY - do not skip)<br />
-				2. **THEN: Apply your fix** based on the debug info (edit and terminal tools become available after debugging)<br />
-				3. **FINALLY: Verify** your changes worked<br />
-				</>}
 				You will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.{tools[ToolName.ReadFile] && <> Some attachments may be summarized with omitted sections like `/* Lines 123-456 omitted */`. You can use the {ToolName.ReadFile} tool to read more context if needed. Never pass this omitted line marker to an edit tool.</>}<br />
 				If you can infer the project type (languages, frameworks, and libraries) from the user's query or the context that you have, make sure to keep them in mind when making changes.<br />
 				{!this.props.codesearchMode && <>If the user wants you to implement a feature and they have not specified the files to edit, first break down the user's request into smaller concepts and think about the kinds of files you need to grasp each concept.<br /></>}
@@ -215,21 +200,6 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
 				- Use it to verify fixes rather than assuming they work<br />
 				- If a fix doesn't work, use debug_subagent to understand why<br />
-			</Tag>
-			<Tag name='tools_disabled_until_debug'>
-				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
-				<br />
-				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
-				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
-				- Terminal: `run_in_terminal`<br />
-				<br />
-				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
-				<br />
-				### ⚠️ REQUIRED WORKFLOW<br />
-				<br />
-				1. **FIRST: Call debug_subagent** to understand the bug (MANDATORY - do not skip)<br />
-				2. **THEN: Apply your fix** based on the debug info (edit and terminal tools become available after debugging)<br />
-				3. **FINALLY: Verify** your changes worked<br />
 			</Tag>
 			</>}
 			<Tag name='toolUseInstructions'>

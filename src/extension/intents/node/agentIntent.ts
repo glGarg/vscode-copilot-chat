@@ -93,8 +93,15 @@ export const getAgentTools = async (accessor: ServicesAccessor, request: vscode.
 	allowTools[ToolName.CoreRunTest] = await testService.hasAnyTests();
 	allowTools[ToolName.CoreRunTask] = tasksService.getTasks().length > 0;
 
-	// Always enable the debug subagent tool regardless of tool picker state
-	allowTools[ToolName.DebugSubagent] = true;
+	// Disable debug subagent - use individual debug tools directly instead
+	allowTools[ToolName.DebugSubagent] = false;
+	// Enable individual debug tools for the main agent
+	allowTools[ToolName.DebugStartSession] = true;
+	allowTools[ToolName.DebugStart] = true;
+	allowTools[ToolName.DebugBreakpoint] = true;
+	allowTools[ToolName.DebugControl] = true;
+	allowTools[ToolName.DebugInspect] = true;
+	allowTools[ToolName.DebugThreads] = true;
 
 	if (model.family.includes('grok-code')) {
 		allowTools[ToolName.CoreManageTodoList] = false;
@@ -266,10 +273,16 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		
 		// Full toolset for bug fixing
 		const allowedTools = new Set([
+			// Individual debug tools (instead of debug_subagent)
+			ToolName.DebugStartSession,
+			ToolName.DebugStart,
+			ToolName.DebugBreakpoint,
+			ToolName.DebugControl,
+			ToolName.DebugInspect,
+			ToolName.DebugThreads,
 			// Search and context gathering
-			ToolName.DebugSubagent,
+			ToolName.ReadFile,
 			ToolName.FindTextInFiles,       // grep_search
-			ToolName.ReadFile,              // read_file
 			ToolName.FindFiles,             // file_search
 			ToolName.ListDir,               // list_dir
 			// File editing - create_file always allowed for repro scripts

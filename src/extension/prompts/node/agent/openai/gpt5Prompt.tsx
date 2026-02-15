@@ -29,67 +29,49 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				- Communicate with the user by streaming thinking & responses, and by making & updating plans.<br />
 				- Execute a wide range of development tasks including file operations, code analysis, testing, workspace management, and external integrations.<br />
 			</Tag>
-			{tools[ToolName.DebugSubagent] && <>
-			<Tag name='debug_subagent_instructions'>
-				## Using debug_subagent for Bug Fixing<br />
+			{tools[ToolName.DebugStartSession] && <>
+			<Tag name='debug_tools_instructions'>
+				## Using Debug Tools for Bug Fixing<br />
 				<br />
-				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
+				You have access to debugging tools that can inspect runtime values, trace execution, and help verify fixes. Use them to understand bugs before making changes.<br />
 				<br />
-				### Recommended Workflow:<br />
+				### Available Debug Tools:<br />
+				- `debug_start_session`: Initialize a debug session for a test<br />
+				- `debug_start`: Start debugging and run to first breakpoint<br />
+				- `debug_breakpoint`: Set, remove, or list breakpoints<br />
+				- `debug_control`: Control execution (continue, step_over, step_into, step_out)<br />
+				- `debug_inspect`: Inspect variables, evaluate expressions, get stack trace<br />
+				- `debug_threads`: List and switch between threads<br />
 				<br />
-				**Step 1: Understand the bug** (before making changes)<br />
-				```<br />
-				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", test: "com.example.MyTest#testMethod"{'}'})<br />
-				```<br />
-				Be specific - include the actual test name rather than saying "the failing test".<br />
-				<br />
-				**Step 2: Investigate root cause**<br />
-				```<br />
-				debug_subagent({'{'}question: "What is the value of [variable] at [location]?"{'}'})<br />
-				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
-				```<br />
-				<br />
-				**Step 3: Apply your fix**<br />
-				<br />
-				**Step 4: Verify the fix works**<br />
-				```<br />
-				debug_subagent({'{'}question: "Does the test pass now after my fix?"{'}'})<br />
-				```<br />
-				<br />
-				### Example Session:<br />
-				<br />
-				```<br />
-				// Using debug_subagent throughout:<br />
-				1. debug_subagent: "What exception in DubboEnumSetTest?"<br />
-				   → "ClassCastException at line 335"<br />
-				2. debug_subagent: "What is listType at line 335?"<br />
-				   → "listType=RegularEnumSet but this.listType=ArrayList"<br />
-				3. Apply fix to preserve listType<br />
-				4. debug_subagent: "Does DubboEnumSetTest pass now?"<br />
-				   → "Yes, test passes"<br />
-				5. Done!<br />
-				```<br />
-				<br />
-				### Tips:<br />
-				- debug_subagent handles compilation automatically (incremental builds are fast)<br />
-				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
-				- Use it to verify fixes rather than assuming they work<br />
-				- If a fix doesn't work, use debug_subagent to understand why<br />
-			</Tag>
-			<Tag name='tools_disabled_until_debug'>
-				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
-				<br />
-				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
-				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
-				- Terminal: `run_in_terminal`<br />
-				<br />
-				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
-				<br />
-				### ⚠️ REQUIRED WORKFLOW<br />
-				<br />
-				1. **FIRST: Call debug_subagent** to understand the bug (MANDATORY - do not skip)<br />
-				2. **THEN: Apply your fix** based on the debug info (edit and terminal tools become available after debugging)<br />
-				3. **FINALLY: Verify** with `run_in_terminal: "pytest tests/test_file.py -v"`<br />
+				### Recommended Workflow<br />
+<br />
+**Step 1: Start debug session with initial breakpoints**<br />
+```<br />
+debug_start_session({'{'}test: "com.example.MyTest#testMethod", initialBreakpoints: [{'{'}className: "com.example.MyClass", line: 42{'}'}]{'}'})<br />
+```<br />
+<br />
+**Step 2: Inspect variables when stopped at breakpoint**<br />
+```<br />
+debug_inspect({'{'}action: "locals"{'}'})<br />
+debug_inspect({'{'}action: "eval", expression: "myVar.toString()"{'}'})<br />
+```<br />
+<br />
+**Step 3: Control execution**<br />
+```<br />
+debug_control({'{'}action: "step_over"{'}'})<br />
+debug_control({'{'}action: "continue"{'}'})<br />
+```<br />
+<br />
+**Step 4: Add more breakpoints if needed**<br />
+```<br />
+debug_breakpoint({'{'}action: "set", className: "com.example.MyClass", line: 50{'}'})<br />
+```<br />
+<br />
+### Tips:<br />
+				- debug_start_session handles test launch and JDB attach atomically<br />
+				- Use debug_inspect with action "locals" for local variables, "eval" for expressions - more reliable than reading code alone<br />
+				- Step through code to understand execution flow<br />
+				- After fixing, run the test again to verify<br />
 			</Tag>
 			</>}
 			<Tag name='personality'>

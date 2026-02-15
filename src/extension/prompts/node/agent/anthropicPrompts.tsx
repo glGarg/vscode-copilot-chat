@@ -24,7 +24,7 @@ class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps>
 				You are a highly sophisticated automated coding agent with expert-level knowledge across many different programming languages and frameworks.<br />
 				The user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
-				{tools[ToolName.DebugSubagent] && <>For Java bugs, use {ToolName.DebugSubagent} to ask specific questions about runtime behavior EARLY in your investigation. Call it with a specific question like "What is `listType` at line 330?" rather than broad tasks. The subagent will set breakpoints, run the test, and return factual answers about variable values, execution paths, and exception causes.<br /></>}
+				{tools[ToolName.DebugStartSession] && <>For Java bugs, use the debug tools (`debug_start_session`, `debug_breakpoint`, `debug_start`, `debug_inspect`, `debug_control`) to inspect runtime behavior. Set breakpoints, run the test, and inspect variable values, execution paths, and exception causes directly.<br /></>}
 				You will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.{tools[ToolName.ReadFile] && <> Some attachments may be summarized with omitted sections like `/* Lines 123-456 omitted */`. You can use the {ToolName.ReadFile} tool to read more context if needed. Never pass this omitted line marker to an edit tool.</>}<br />
 				If you can infer the project type (languages, frameworks, and libraries) from the user's query or the context that you have, make sure to keep them in mind when making changes.<br />
 				{!this.props.codesearchMode && <>If the user wants you to implement a feature and they have not specified the files to edit, first break down the user's request into smaller concepts and think about the kinds of files you need to grasp each concept.<br /></>}
@@ -145,61 +145,56 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 					</Tag>
 				</>}
 			</Tag>
-			{tools[ToolName.DebugSubagent] && <>
-			<Tag name='debug_subagent_instructions'>
-				## Using debug_subagent for Bug Fixing<br />
+			{tools[ToolName.DebugStartSession] && <>
+			<Tag name='debug_tools_instructions'>
+				## Using Debug Tools for Bug Fixing<br />
 				<br />
-				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
+				You have access to debugging tools that can inspect runtime values, trace execution, and help verify fixes. Use them to understand bugs before making changes.<br />
+				<br />
+				### Available Debug Tools:<br />
+				- `debug_start_session`: Initialize a debug session for a test<br />
+				- `debug_start`: Start debugging and run to first breakpoint<br />
+				- `debug_breakpoint`: Set, remove, or list breakpoints<br />
+				- `debug_control`: Control execution (continue, step_over, step_into, step_out)<br />
+				- `debug_inspect`: Inspect variables, evaluate expressions, get stack trace<br />
+				- `debug_threads`: List and switch between threads<br />
 				<br />
 				### Prerequisite: Build Before Debugging<br />
 				<br />
-				Before calling debug_subagent, ensure the project compiles:<br />
+				Before debugging, ensure the project compiles:<br />
 				- Maven: `mvn test-compile` or `mvn compile`<br />
 				- Gradle: `./gradlew testClasses` or `./gradlew compileTestJava`<br />
 				<br />
 				### Recommended Workflow<br />
+<br />
+**Step 1: Start debug session with initial breakpoints**<br />
+```<br />
+debug_start_session({'{'}test: "com.example.MyTest#testMethod", initialBreakpoints: [{'{'}className: "com.example.MyClass", line: 42{'}'}]{'}'})<br />
+```<br />
+<br />
+**Step 2: Inspect variables when stopped at breakpoint**<br />
+```<br />
+debug_inspect({'{'}action: "locals"{'}'})<br />
+debug_inspect({'{'}action: "eval", expression: "myVar.toString()"{'}'})<br />
+```<br />
+<br />
+**Step 3: Control execution**<br />
+```<br />
+debug_control({'{'}action: "step_over"{'}'})<br />
+debug_control({'{'}action: "continue"{'}'})<br />
+```<br />
+<br />
+**Step 4: Add more breakpoints if needed**<br />
+```<br />
+debug_breakpoint({'{'}action: "set", className: "com.example.MyClass", line: 50{'}'})<br />
+```<br />
+<br />
+### Tips<br />
 				<br />
-				**Step 1: Understand the bug** (before making changes)<br />
-				- "What exception is thrown and what is the stack trace in test X?"<br />
-				- "What is the value of `variable` when the test fails?"<br />
-				<br />
-				**Step 2: Investigate root cause**<br />
-				- "Why does `condition` evaluate to true/false at line N?"<br />
-				- "What is `this.field` vs `parameter` at the branch point?"<br />
-				<br />
-				**Step 3: Verify the fix**<br />
-				- "After my change, does the test now pass?"<br />
-				- "After the fix, what is the value of `variable` at line N?"<br />
-				<br />
-				### How to Call<br />
-				<br />
-				```<br />
-				debug_subagent({'{'}<br />
-				{'  '}question: "What is the value of `listType` at line 330?",  // required<br />
-				{'  '}file: "ObjectReaderImplList.java",                         // optional<br />
-				{'  '}line: 330,                                                 // optional<br />
-				{'  '}test: "com.alibaba.fastjson2.DubboEnumSetTest#testEnumSet", // optional<br />
-				{'  '}variables: ["listType", "this.listType"],                  // optional<br />
-				{'  '}context: "I suspect listType is RegularEnumSet..."         // optional<br />
-				{'}'})<br />
-				```<br />
-				<br />
-				### Example Session<br />
-				<br />
-				**Step 1 (Reproduction)**: debug_subagent({'{'}question: "What exception is thrown in EnumSetTest?"{'}'})<br />
-				→ "ClassCastException at line 335: RegularEnumSet cannot be cast to ArrayList"<br />
-				<br />
-				**Step 2 (Understanding)**: debug_subagent({'{'}question: "What is listType vs this.listType at line 335?", file: "ObjectReaderImplList.java"{'}'})<br />
-				→ "listType=RegularEnumSet, this.listType=ArrayList - they differ causing wrong instantiation"<br />
-				<br />
-				**Step 3 (After fix)**: debug_subagent({'{'}question: "After my fix, does EnumSetTest pass?"{'}'})<br />
-				→ "Yes, the test now passes. listType is correctly preserved."<br />
-				<br />
-				### Tips<br />
-				<br />
-				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
-				- Use it to verify fixes rather than assuming they work<br />
-				- If a fix doesn't work, use debug_subagent to understand why<br />
+				- debug_start_session handles test launch and JDB attach atomically<br />
+				- Use debug_inspect with action "locals" for local variables, "eval" for expressions - more reliable than reading code alone<br />
+				- Step through code to understand execution flow<br />
+				- After fixing, run the test again to verify<br />
 			</Tag>
 			</>}
 			<Tag name='toolUseInstructions'>

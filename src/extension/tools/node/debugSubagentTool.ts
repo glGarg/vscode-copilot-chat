@@ -97,7 +97,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
 		}
 		
-		// Validate script parameter - reject "-", empty string, or relative paths
+		// Validate script parameter - reject "-", empty string, relative paths, or non-Python files
 		if (script) {
 			if (script === '-' || script === '') {
 				const errorMessage = 
@@ -115,16 +115,37 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 				console.log('[DebugSubagentTool] ERROR: Relative script path:', script);
 				return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
 			}
+			if (!script.endsWith('.py')) {
+				const errorMessage = 
+					`ERROR: Script must be a Python file (.py): "${script}".\n\n` +
+					`The 'script' parameter must point to a Python file that can be executed.\n` +
+					`If you have a YAML/JSON config file, you need to create a Python script that uses it.\n\n` +
+					`Example:\n` +
+					`1. Create a Python script: create_file({path: "/testbed/run_check.py", content: "..."})\n` +
+					`2. Then call debug_subagent with: script: "/testbed/run_check.py"`;
+				console.log('[DebugSubagentTool] ERROR: Non-Python script:', script);
+				return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+			}
 		}
 		
-		// Validate testFile parameter - reject relative paths
-		if (testFile && !testFile.startsWith('/')) {
-			const errorMessage = 
-				`ERROR: Relative path not allowed for testFile: "${testFile}".\n\n` +
-				`You MUST use an absolute path starting with /.\n\n` +
-				`Example: testFile: "/testbed/${testFile}"`;
-			console.log('[DebugSubagentTool] ERROR: Relative testFile path:', testFile);
-			return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+		// Validate testFile parameter - reject relative paths and non-Python files
+		if (testFile) {
+			if (!testFile.startsWith('/')) {
+				const errorMessage = 
+					`ERROR: Relative path not allowed for testFile: "${testFile}".\n\n` +
+					`You MUST use an absolute path starting with /.\n\n` +
+					`Example: testFile: "/testbed/${testFile}"`;
+				console.log('[DebugSubagentTool] ERROR: Relative testFile path:', testFile);
+				return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+			}
+			if (!testFile.endsWith('.py')) {
+				const errorMessage = 
+					`ERROR: testFile must be a Python test file (.py): "${testFile}".\n\n` +
+					`The 'testFile' parameter must point to a pytest test file.\n\n` +
+					`Example: testFile: "/testbed/tests/test_example.py"`;
+				console.log('[DebugSubagentTool] ERROR: Non-Python testFile:', testFile);
+				return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+			}
 		}
 		
 		// Validate file parameter - reject relative paths

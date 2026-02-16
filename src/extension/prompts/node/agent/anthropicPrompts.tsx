@@ -46,10 +46,9 @@ class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps>
 				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
 				<br />
 				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
-				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
-				- Terminal: `run_in_terminal`<br />
+				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`<br />
 				<br />
-				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
+				You can still use `create_file` to write reproduction scripts.<br />
 				<br />
 				### ⚠️ REQUIRED WORKFLOW<br />
 				<br />
@@ -222,10 +221,9 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
 				<br />
 				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
-				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
-				- Terminal: `run_in_terminal`<br />
+				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`<br />
 				<br />
-				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
+				You can still use `create_file` to write reproduction scripts.<br />
 				<br />
 				### ⚠️ REQUIRED WORKFLOW<br />
 				<br />

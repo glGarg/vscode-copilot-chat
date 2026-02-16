@@ -274,21 +274,21 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		const allowedTools = new Set([
 			// Search and context gathering
 			ToolName.DebugSubagent,
-			//ToolName.FindTextInFiles,       // grep_search
+			ToolName.FindTextInFiles,       // grep_search
 			ToolName.ReadFile,              // read_file
-			//ToolName.FindFiles,             // file_search
+			ToolName.FindFiles,             // file_search
 			ToolName.ListDirectory,         // list_dir
 			// File editing - create_file always allowed for repro scripts
 			ToolName.CreateFile,            // create_file
 			// Edit tools - only available after debug_subagent has been called
-			...(debugSubagentCalled ? [ToolName.ApplyPatch] : []),            // apply_patch
-			//...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
-			//...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
+			//...(debugSubagentCalled ? [ToolName.ApplyPatch] : []),            // apply_patch
+			...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
+			...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
 			// Terminal - only available after debug_subagent has been called
-			...(debugSubagentCalled ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
+			ToolName.CoreRunInTerminal,     // run_in_terminal
 			// Planning
 			ToolName.CoreManageTodoList,    // manage_todo_list
-			//ToolName.GetErrors,
+			ToolName.GetErrors,
 		]);
 		
 		return allTools.filter(tool => allowedTools.has(tool.name as ToolName));

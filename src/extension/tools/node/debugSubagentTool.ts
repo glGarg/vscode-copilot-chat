@@ -64,6 +64,29 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		
 		const { question, testFile, testName, script, scriptArgs, file, line, function: funcName, variables, context } = options.input;
 		
+		// Validate that either testFile OR script is provided (required)
+		if (!testFile && !script) {
+			const errorMessage = 
+				`ERROR: Missing required 'testFile' or 'script' parameter.\n\n` +
+				`You MUST specify how to run the code:\n` +
+				`- Use 'testFile' for pytest tests (e.g., testFile: "/testbed/tests/test_example.py")\n` +
+				`- Use 'script' for regular Python scripts (e.g., script: "/testbed/repro.py")\n\n` +
+				`The main agent must gather this information BEFORE calling debug_subagent.`;
+			console.log('[DebugSubagentTool] ERROR: Missing testFile or script parameter');
+			return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+		}
+		
+		// Validate file parameter - REQUIRED (must know where to set breakpoint)
+		if (!file) {
+			const errorMessage = 
+				`ERROR: Missing required 'file' parameter.\n\n` +
+				`You MUST specify the file where the breakpoint should be set.\n\n` +
+				`Example: file: "/testbed/src/module.py"\n\n` +
+				`The main agent must identify the relevant source file BEFORE calling debug_subagent.`;
+			console.log('[DebugSubagentTool] ERROR: Missing file parameter');
+			return new ExtendedLanguageModelToolResult([new LanguageModelTextPart(errorMessage)]);
+		}
+		
 		// Validate function parameter - REQUIRED
 		if (!funcName) {
 			const errorMessage = 
@@ -152,6 +175,8 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 		console.log('[DebugSubagentTool] Debug instruction built:', debugInstruction);
 
 		// Define the tools available to the debug subagent
+		// IMPORTANT: No exploration tools (FindFiles, FindTextInFiles, ListDirectory)
+		// The main agent must provide all context; subagent should focus only on debugging
 		const allowedTools = new Set([
 			// Primary tool: Unified debug session (atomic: start test + attach + breakpoints + continue)
 			ToolName.DebugStartSession,
@@ -160,11 +185,8 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			ToolName.DebugControl,
 			ToolName.DebugInspect,
 			ToolName.DebugThreads,
-			// Code navigation tools
+			// Read file only (for viewing source context at breakpoints)
 			ToolName.ReadFile,
-			ToolName.FindFiles,
-			ToolName.FindTextInFiles,
-			ToolName.ListDirectory,
 		]);
 
 		const loop = this.instantiationService.createInstance(SubagentToolCallingLoop, {

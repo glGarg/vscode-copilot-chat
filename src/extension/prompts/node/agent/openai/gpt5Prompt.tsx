@@ -44,17 +44,21 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				### Parameter Format<br />
 				<br />
-				The `function` parameter is **REQUIRED** - specify which function/method to debug.<br />
-				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
+				**REQUIRED parameters** (ALL must be provided):<br />
+				- `testFile` OR `script`: How to run the code (use one, not both)<br />
+				- `file`: The source file where breakpoint will be set<br />
+				- `function`: The function/method name to debug<br />
+				<br />
 				**ALWAYS use ABSOLUTE paths** (starting with `/`) for all file parameters.<br />
+				The main agent must gather this information BEFORE calling debug_subagent.<br />
 				<br />
 				**For PYTEST tests** (use existing test files):<br />
 				```<br />
 				debug_subagent({'{'}<br />
 				{'  '}question: "What causes the TypeError?",<br />
-				{'  '}testFile: "/testbed/tests/test_example.py",  // ABSOLUTE path to test<br />
+				{'  '}testFile: "/testbed/tests/test_example.py",  // REQUIRED: ABSOLUTE path to test<br />
 				{'  '}testName: "test_my_function",                // Optional: specific test<br />
-				{'  '}file: "/testbed/src/utils.py",               // ABSOLUTE path to file<br />
+				{'  '}file: "/testbed/src/utils.py",               // REQUIRED: ABSOLUTE path to breakpoint file<br />
 				{'  '}function: "process_data",                    // REQUIRED: function to debug<br />
 				{'  '}line: 42                                     // Optional: specific line<br />
 				{'}'})<br />
@@ -68,8 +72,8 @@ class DefaultGpt5AgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				// STEP 2: Then call debug_subagent with the script<br />
 				debug_subagent({'{'}<br />
 				{'  '}question: "What is x at line 10?",<br />
-				{'  '}script: "/testbed/repro.py",             // ABSOLUTE path to script you created<br />
-				{'  '}file: "/testbed/src/module.py",          // ABSOLUTE path to file<br />
+				{'  '}script: "/testbed/repro.py",             // REQUIRED: ABSOLUTE path to script<br />
+				{'  '}file: "/testbed/src/module.py",          // REQUIRED: ABSOLUTE path to breakpoint file<br />
 				{'  '}function: "MyClass.validate",            // REQUIRED: function to debug<br />
 				{'  '}line: 50                                 // Optional: specific line<br />
 				{'}'})<br />

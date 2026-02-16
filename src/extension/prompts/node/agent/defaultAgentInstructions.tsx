@@ -128,16 +128,23 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				<br />
 				### Parameter Format<br />
 				<br />
-				Use `testFile` for pytest tests, `script` for regular Python scripts. Do NOT mix them.<br />
+				**REQUIRED parameters** (ALL must be provided):<br />
+				- `testFile` OR `script`: How to run the code (use one, not both)<br />
+				- `file`: The source file where breakpoint will be set<br />
+				- `function`: The function/method name to debug<br />
+				<br />
+				**ALWAYS use ABSOLUTE paths** (starting with `/`) for all file parameters.<br />
+				The main agent must gather this information BEFORE calling debug_subagent.<br />
 				<br />
 				**For PYTEST tests:**<br />
 				```<br />
 				debug_subagent({'{'}<br />
 				{'  '}question: "What causes the TypeError?",<br />
-				{'  '}testFile: "tests/test_example.py",      // Test file to run<br />
-				{'  '}testName: "test_my_function",           // Optional: specific test<br />
-				{'  '}file: "src/utils.py",                   // Optional: breakpoint file<br />
-				{'  '}line: 42                                // Optional: breakpoint line<br />
+				{'  '}testFile: "/testbed/tests/test_example.py",  // REQUIRED: ABSOLUTE path to test<br />
+				{'  '}testName: "test_my_function",                 // Optional: specific test<br />
+				{'  '}file: "/testbed/src/utils.py",                // REQUIRED: ABSOLUTE path to breakpoint file<br />
+				{'  '}function: "process_data",                     // REQUIRED: function to debug<br />
+				{'  '}line: 42                                      // Optional: specific line<br />
 				{'}'})<br />
 				```<br />
 				<br />
@@ -145,9 +152,10 @@ export class DefaultAgentPrompt extends PromptElement<DefaultAgentPromptProps> {
 				```<br />
 				debug_subagent({'{'}<br />
 				{'  '}question: "What is x at line 50?",<br />
-				{'  '}script: "main.py",                      // Script to run<br />
-				{'  '}file: "main.py",                        // Breakpoint file<br />
-				{'  '}line: 50                                // Breakpoint line<br />
+				{'  '}script: "/testbed/main.py",               // REQUIRED: ABSOLUTE path to script<br />
+				{'  '}file: "/testbed/main.py",                 // REQUIRED: ABSOLUTE path to breakpoint file<br />
+				{'  '}function: "process",                      // REQUIRED: function to debug<br />
+				{'  '}line: 50                                  // Optional: specific line<br />
 				{'}'})<br />
 				```<br />
 				<br />

@@ -185,6 +185,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			ToolName.DebugControl,
 			ToolName.DebugInspect,
 			ToolName.DebugThreads,
+			ToolName.RunInTerminal,
 			// Read file only (for viewing source context at breakpoints)
 			ToolName.ReadFile,
 		]);

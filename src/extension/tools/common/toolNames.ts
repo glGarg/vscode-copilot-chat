@@ -226,15 +226,14 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.FindTestFiles]: ToolCategory.Testing,
 	[ToolName.CoreRunTest]: ToolCategory.Testing,
 
-	// Debugging - debug tools now exposed directly to main agent
-	[ToolName.DebugSubagent]: ToolCategory.Internal, // Disabled - using individual tools instead
-	// Debug tools available to main agent
-	[ToolName.DebugStartSession]: ToolCategory.Debugging,
-	[ToolName.DebugStart]: ToolCategory.Debugging,
-	[ToolName.DebugBreakpoint]: ToolCategory.Debugging,
-	[ToolName.DebugControl]: ToolCategory.Debugging,
-	[ToolName.DebugInspect]: ToolCategory.Debugging,
-	[ToolName.DebugThreads]: ToolCategory.Debugging,
+	// Debugging - all debug tools disabled
+	[ToolName.DebugSubagent]: ToolCategory.Internal,
+	[ToolName.DebugStartSession]: ToolCategory.Internal,
+	[ToolName.DebugStart]: ToolCategory.Internal,
+	[ToolName.DebugBreakpoint]: ToolCategory.Internal,
+	[ToolName.DebugControl]: ToolCategory.Internal,
+	[ToolName.DebugInspect]: ToolCategory.Internal,
+	[ToolName.DebugThreads]: ToolCategory.Internal,
 
 	// Redundant but Specific
 	[ToolName.DocInfo]: ToolCategory.RedundantButSpecific,

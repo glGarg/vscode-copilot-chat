@@ -93,15 +93,14 @@ export const getAgentTools = async (accessor: ServicesAccessor, request: vscode.
 	allowTools[ToolName.CoreRunTest] = await testService.hasAnyTests();
 	allowTools[ToolName.CoreRunTask] = tasksService.getTasks().length > 0;
 
-	// Disable debug subagent - use individual debug tools directly instead
+	// All debug tools disabled
 	allowTools[ToolName.DebugSubagent] = false;
-	// Enable individual debug tools for the main agent
-	allowTools[ToolName.DebugStartSession] = true;
-	allowTools[ToolName.DebugStart] = true;
-	allowTools[ToolName.DebugBreakpoint] = true;
-	allowTools[ToolName.DebugControl] = true;
-	allowTools[ToolName.DebugInspect] = true;
-	allowTools[ToolName.DebugThreads] = true;
+	allowTools[ToolName.DebugStartSession] = false;
+	allowTools[ToolName.DebugStart] = false;
+	allowTools[ToolName.DebugBreakpoint] = false;
+	allowTools[ToolName.DebugControl] = false;
+	allowTools[ToolName.DebugInspect] = false;
+	allowTools[ToolName.DebugThreads] = false;
 
 	if (model.family.includes('grok-code')) {
 		allowTools[ToolName.CoreManageTodoList] = false;
@@ -273,13 +272,6 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		
 		// Full toolset for bug fixing
 		const allowedTools = new Set([
-			// Individual debug tools (instead of debug_subagent)
-			ToolName.DebugStartSession,
-			ToolName.DebugStart,
-			ToolName.DebugBreakpoint,
-			ToolName.DebugControl,
-			ToolName.DebugInspect,
-			ToolName.DebugThreads,
 			// Search and context gathering
 			ToolName.ReadFile,
 			ToolName.FindTextInFiles,       // grep_search
@@ -288,7 +280,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			// File editing - create_file always allowed for repro scripts
 			ToolName.CreateFile,            // create_file
 			// Edit tools - only available after debug_subagent has been called
-			//...(true ? [ToolName.ApplyPatch] : []),            // apply_patch
+			...(true ? [ToolName.ApplyPatch] : []),            // apply_patch
 			...(true ? [ToolName.ReplaceString] : []),         // replace_string_in_file
 			...(true ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
 			// Terminal - only available after debug_subagent has been called

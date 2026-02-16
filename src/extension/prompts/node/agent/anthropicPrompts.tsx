@@ -24,7 +24,6 @@ class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps>
 				You are a highly sophisticated automated coding agent with expert-level knowledge across many different programming languages and frameworks.<br />
 				The user will ask a question, or ask you to perform a task, and it may require lots of research to answer correctly. There is a selection of tools that let you perform actions or retrieve helpful context to answer the user's question.<br />
 				{tools[ToolName.SearchSubagent] && <>For any context searching, use {ToolName.SearchSubagent} to search and gather data instead of directly calling {ToolName.FindTextInFiles}, {ToolName.Codebase} or {ToolName.FindFiles}.<br /></>}
-				{tools[ToolName.DebugStartSession] && <>For Java bugs, use the debug tools (`debug_start_session`, `debug_breakpoint`, `debug_start`, `debug_inspect`, `debug_control`) to inspect runtime behavior. Set breakpoints, run the test, and inspect variable values, execution paths, and exception causes directly.<br /></>}
 				You will be given some context and attachments along with the user prompt. You can use them if they are relevant to the task, and ignore them if not.{tools[ToolName.ReadFile] && <> Some attachments may be summarized with omitted sections like `/* Lines 123-456 omitted */`. You can use the {ToolName.ReadFile} tool to read more context if needed. Never pass this omitted line marker to an edit tool.</>}<br />
 				If you can infer the project type (languages, frameworks, and libraries) from the user's query or the context that you have, make sure to keep them in mind when making changes.<br />
 				{!this.props.codesearchMode && <>If the user wants you to implement a feature and they have not specified the files to edit, first break down the user's request into smaller concepts and think about the kinds of files you need to grasp each concept.<br /></>}
@@ -37,58 +36,6 @@ class DefaultAnthropicAgentPrompt extends PromptElement<DefaultAgentPromptProps>
 				{tools[ToolName.CoreRunInTerminal] && <>NEVER print out a codeblock with a terminal command to run unless the user asked for it. Use the {ToolName.CoreRunInTerminal} tool instead.<br /></>}
 				You don't need to read a file if it's already provided in context.
 			</Tag>
-			{tools[ToolName.DebugStartSession] && <>
-			<Tag name='debug_tools_instructions'>
-				## Using Debug Tools for Bug Fixing<br />
-				<br />
-				You have access to debugging tools that can inspect runtime values, trace execution, and help verify fixes. Use them to understand bugs before making changes.<br />
-				<br />
-				### Available Debug Tools:<br />
-				- `debug_start_session`: Initialize a debug session for a test<br />
-				- `debug_start`: Start debugging and run to first breakpoint<br />
-				- `debug_breakpoint`: Set, remove, or list breakpoints<br />
-				- `debug_control`: Control execution (continue, step_over, step_into, step_out)<br />
-				- `debug_inspect`: Inspect variables, evaluate expressions, get stack trace<br />
-				- `debug_threads`: List and switch between threads<br />
-				<br />
-				### Prerequisite: Build Before Debugging<br />
-				<br />
-				Before debugging, ensure the project compiles:<br />
-				- Maven: `mvn test-compile` or `mvn compile`<br />
-				- Gradle: `./gradlew testClasses` or `./gradlew compileTestJava`<br />
-				<br />
-				### Recommended Workflow<br />
-<br />
-**Step 1: Start debug session with initial breakpoints**<br />
-```<br />
-debug_start_session({'{'}test: "com.example.MyTest#testMethod", initialBreakpoints: [{'{'}className: "com.example.MyClass", line: 42{'}'}]{'}'})<br />
-```<br />
-<br />
-**Step 2: Inspect variables when stopped at breakpoint**<br />
-```<br />
-debug_inspect({'{'}action: "locals"{'}'})<br />
-debug_inspect({'{'}action: "eval", expression: "myVar.toString()"{'}'})<br />
-```<br />
-<br />
-**Step 3: Control execution**<br />
-```<br />
-debug_control({'{'}action: "step_over"{'}'})<br />
-debug_control({'{'}action: "continue"{'}'})<br />
-```<br />
-<br />
-**Step 4: Add more breakpoints if needed**<br />
-```<br />
-debug_breakpoint({'{'}action: "set", className: "com.example.MyClass", line: 50{'}'})<br />
-```<br />
-<br />
-### Tips<br />
-<br />
-- debug_start_session handles test launch and JDB attach atomically<br />
-- Use debug_inspect with action "locals" to see local variables, "eval" to evaluate expressions<br />
-- Step through code to understand execution flow<br />
-- After fixing, run the test again to verify<br />
-</Tag>
-			</>}
 			<Tag name='toolUseInstructions'>
 				If the user is requesting a code sample, you can answer it directly without using any tools.<br />
 				When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.<br />
@@ -197,58 +144,6 @@ class Claude45DefaultPrompt extends PromptElement<DefaultAgentPromptProps> {
 					</Tag>
 				</>}
 			</Tag>
-			{tools[ToolName.DebugStartSession] && <>
-			<Tag name='debug_tools_instructions'>
-				## Using Debug Tools for Bug Fixing<br />
-				<br />
-				You have access to debugging tools that can inspect runtime values, trace execution, and help verify fixes. Use them to understand bugs before making changes.<br />
-				<br />
-				### Available Debug Tools:<br />
-				- `debug_start_session`: Initialize a debug session for a test<br />
-				- `debug_start`: Start debugging and run to first breakpoint<br />
-				- `debug_breakpoint`: Set, remove, or list breakpoints<br />
-				- `debug_control`: Control execution (continue, step_over, step_into, step_out)<br />
-				- `debug_inspect`: Inspect variables, evaluate expressions, get stack trace<br />
-				- `debug_threads`: List and switch between threads<br />
-				<br />
-				### Prerequisite: Build Before Debugging<br />
-				<br />
-				Before debugging, ensure the project compiles:<br />
-				- Maven: `mvn test-compile` or `mvn compile`<br />
-				- Gradle: `./gradlew testClasses` or `./gradlew compileTestJava`<br />
-				<br />
-				### Recommended Workflow<br />
-<br />
-**Step 1: Start debug session with initial breakpoints**<br />
-```<br />
-debug_start_session({'{'}test: "com.example.MyTest#testMethod", initialBreakpoints: [{'{'}className: "com.example.MyClass", line: 42{'}'}]{'}'})<br />
-```<br />
-<br />
-**Step 2: Inspect variables when stopped at breakpoint**<br />
-```<br />
-debug_inspect({'{'}action: "locals"{'}'})<br />
-debug_inspect({'{'}action: "eval", expression: "myVar.toString()"{'}'})<br />
-```<br />
-<br />
-**Step 3: Control execution**<br />
-```<br />
-debug_control({'{'}action: "step_over"{'}'})<br />
-debug_control({'{'}action: "continue"{'}'})<br />
-```<br />
-<br />
-**Step 4: Add more breakpoints if needed**<br />
-```<br />
-debug_breakpoint({'{'}action: "set", className: "com.example.MyClass", line: 50{'}'})<br />
-```<br />
-<br />
-### Tips<br />
-<br />
-- debug_start_session handles test launch and JDB attach atomically<br />
-- Use debug_inspect with action "locals" to see local variables, "eval" to evaluate expressions<br />
-- Step through code to understand execution flow<br />
-- After fixing, run the test again to verify<br />
-</Tag>
-			</>}
 			<Tag name='toolUseInstructions'>
 				If the user is requesting a code sample, you can answer it directly without using any tools.<br />
 				When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.<br />

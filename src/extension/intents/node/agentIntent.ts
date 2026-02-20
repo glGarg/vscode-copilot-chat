@@ -103,9 +103,7 @@ export const getAgentTools = async (accessor: ServicesAccessor, request: vscode.
 	allowTools[ToolName.CoreRunTest] = await testService.hasAnyTests();
 	allowTools[ToolName.CoreRunTask] = tasksService.getTasks().length > 0;
 
-	const searchSubagentEnabled = configurationService.getExperimentBasedConfig(ConfigKey.Advanced.SearchSubagentToolEnabled, experimentationService);
-	const isGptOrAnthropic = isGptFamily(model) || isAnthropicFamily(model);
-	allowTools[ToolName.SearchSubagent] = isGptOrAnthropic && searchSubagentEnabled;
+	allowTools[ToolName.SearchSubagent] = true;
 
 	if (model.family.includes('grok-code')) {
 		allowTools[ToolName.CoreManageTodoList] = false;

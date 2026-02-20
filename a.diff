@@ -1,0 +1,75 @@
+diff --git a/package.json b/package.json
+index 273d0d61..98f1db19 100644
+--- a/package.json
++++ b/package.json
+@@ -4484,7 +4484,7 @@
+                                        },
+                                        "github.copilot.chat.searchSubagent.enabled": {
+                                                "type": "boolean",
+-                                               "default": false,
++                                               "default": true,
+                                                "markdownDescription": "%github.copilot.config.searchSubagent.enabled%",
+                                                "tags": [
+                                                        "advanced",
+diff --git a/src/extension/prompt/node/searchSubagentToolCallingLoop.ts b/src/extension/prompt/node/searchSubagentToolCallingLoop.ts
+index d22dbd23..fc6c8cbb 100644
+--- a/src/extension/prompt/node/searchSubagentToolCallingLoop.ts
++++ b/src/extension/prompt/node/searchSubagentToolCallingLoop.ts
+@@ -5,12 +5,13 @@
+ 
+ import { randomUUID } from 'crypto';
+ import type { CancellationToken, ChatRequest, ChatResponseStream, LanguageModelToolInformation, Progress } from 'vscode';
++import { lm } from 'vscode';
+ import { IAuthenticationChatUpgradeService } from '../../../platform/authentication/common/authenticationUpgrade';
+ import { IChatHookService } from '../../../platform/chat/common/chatHookService';
+ import { ChatLocation, ChatResponse } from '../../../platform/chat/common/commonTypes';
+ import { ISessionTranscriptService } from '../../../platform/chat/common/sessionTranscriptService';
+ import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
+-import { ChatEndpointFamily, IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
++import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
+ import { ProxyAgenticSearchEndpoint } from '../../../platform/endpoint/node/proxyAgenticSearchEndpoint';
+ import { ILogService } from '../../../platform/log/common/logService';
+ import { IRequestLogger } from '../../../platform/requestLogger/node/requestLogger';
+@@ -73,25 +74,16 @@ export class SearchSubagentToolCallingLoop extends ToolCallingLoop<ISearchSubage
+         * Get the endpoint to use for the search subagent
+         */
+        private async getEndpoint() {
+-               const modelName = this._configurationService.getExperimentBasedConfig(ConfigKey.Advanced.SearchSubagentModel, this._experimentationService) as ChatEndpointFamily | undefined;
+                const useAgenticProxy = this.configurationService.getConfig(ConfigKey.Advanced.SearchSubagentUseAgenticProxy);
+                if (useAgenticProxy) {
+                        return this.instantiationService.createInstance(ProxyAgenticSearchEndpoint);
+                }
+ 
+-               if (modelName) {
+-                       try {
+-                               // Try to get the specified model
+-                               return await this.endpointProvider.getChatEndpoint(modelName);
+-                       } catch (error) {
+-                               // Model not available or doesn't support tool calls, fallback to main agent
+-                               this._logService.warn(`Failed to get model ${modelName}, falling back to main agent endpoint: ${error}`);
+-                               return await this.endpointProvider.getChatEndpoint(this.options.request);
+-                       }
+-               } else {
+-                       // No model name specified, use main agent endpoint
+-                       return await this.endpointProvider.getChatEndpoint(this.options.request);
++               const models = await lm.selectChatModels({ vendor: 'customoai', id: 'qwen3-coder-30b-a3b-instruct' });
++               if (models.length === 0) {
++                       throw new Error('Search subagent model customoai/qwen3-coder-30b-a3b-instruct not found');
+                }
++               return await this.endpointProvider.getChatEndpoint(models[0]);
+        }
+ 
+        protected async buildPrompt(buildPromptContext: IBuildPromptContext, progress: Progress<ChatResponseReferencePart | ChatResponseProgressPart>, token: CancellationToken): Promise<IBuildPromptResult> {
+diff --git a/src/platform/configuration/common/configurationService.ts b/src/platform/configuration/common/configurationService.ts
+index 62175462..4f639c0e 100644
+--- a/src/platform/configuration/common/configurationService.ts
++++ b/src/platform/configuration/common/configurationService.ts
+@@ -689,7 +689,7 @@ export namespace ConfigKey {
+                export const PromptFileContext = defineAndMigrateExpSetting<boolean>('chat.advanced.promptFileContextProvider.enabled', 'chat.promptFileContextProvider.enabled', true);
+                export const DefaultToolsGrouped = defineAndMigrateExpSetting<boolean>('chat.advanced.tools.defaultToolsGrouped', 'chat.tools.defaultToolsGrouped', false);
+                export const Gpt5AlternativePatch = defineAndMigrateExpSetting<boolean>('chat.advanced.gpt5AlternativePatch', 'chat.gpt5AlternativePatch', false);
+-               export const SearchSubagentToolEnabled = defineSetting<boolean>('chat.searchSubagent.enabled', ConfigType.ExperimentBased, false);
++               export const SearchSubagentToolEnabled = defineSetting<boolean>('chat.searchSubagent.enabled', ConfigType.ExperimentBased, true);
+                /** Use the agentic proxy for the search subagent tool */
+                export const SearchSubagentUseAgenticProxy = defineSetting<boolean>('chat.searchSubagent.useAgenticProxy', ConfigType.Simple, false);
+                /** Model name for the agentic search endpoint */

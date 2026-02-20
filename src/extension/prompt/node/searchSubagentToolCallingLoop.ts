@@ -5,12 +5,13 @@
 
 import { randomUUID } from 'crypto';
 import type { CancellationToken, ChatRequest, ChatResponseStream, LanguageModelToolInformation, Progress } from 'vscode';
+import { lm } from 'vscode';
 import { IAuthenticationChatUpgradeService } from '../../../platform/authentication/common/authenticationUpgrade';
 import { IChatHookService } from '../../../platform/chat/common/chatHookService';
 import { ChatLocation, ChatResponse } from '../../../platform/chat/common/commonTypes';
 import { ISessionTranscriptService } from '../../../platform/chat/common/sessionTranscriptService';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
-import { ChatEndpointFamily, IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
+import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
 import { ProxyAgenticSearchEndpoint } from '../../../platform/endpoint/node/proxyAgenticSearchEndpoint';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IOTelService } from '../../../platform/otel/common/otelService';
@@ -86,19 +87,11 @@ export class SearchSubagentToolCallingLoop extends ToolCallingLoop<ISearchSubage
 			return this.instantiationService.createInstance(ProxyAgenticSearchEndpoint, agenticProxyModel);
 		}
 
-		if (modelName) {
-			try {
-				// Try to get the specified model
-				return await this.endpointProvider.getChatEndpoint(modelName);
-			} catch (error) {
-				// Model not available or doesn't support tool calls, fallback to main agent
-				this._logService.warn(`Failed to get model ${modelName}, falling back to main agent endpoint: ${error}`);
-				return await this.endpointProvider.getChatEndpoint(this.options.request);
-			}
-		} else {
-			// No model name specified, use main agent endpoint
-			return await this.endpointProvider.getChatEndpoint(this.options.request);
+		const models = await lm.selectChatModels({ vendor: 'customoai', id: 'qwen3-coder-30b-a3b-instruct' });
+		if (models.length === 0) {
+			throw new Error('Search subagent model customoai/qwen3-coder-30b-a3b-instruct not found');
 		}
+		return await this.endpointProvider.getChatEndpoint(models[0]);
 	}
 
 	protected async buildPrompt(buildPromptContext: IBuildPromptContext, progress: Progress<ChatResponseReferencePart | ChatResponseProgressPart>, token: CancellationToken): Promise<IBuildPromptResult> {

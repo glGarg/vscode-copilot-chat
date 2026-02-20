@@ -45,6 +45,95 @@ export class DefaultOpenAIAgentPrompt extends PromptElement<DefaultAgentPromptPr
 				{tools[ToolName.CoreRunInTerminal] && <>NEVER print out a codeblock with a terminal command to run unless the user asked for it. Use the {ToolName.CoreRunInTerminal} tool instead.<br /></>}
 				You don't need to read a file if it's already provided in context.
 			</Tag>
+			{tools[ToolName.DebugSubagent] && <>
+			<Tag name='debug_subagent_instructions'>
+				## Using debug_subagent for Bug Fixing<br />
+				<br />
+				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
+				<br />
+				### Recommended Workflow:<br />
+				<br />
+				**Step 1: Understand the bug** (before making changes)<br />
+				```<br />
+				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", tests: "com.example.MyTest#testMethod"{'}'})<br />
+				```<br />
+				Be specific - include the actual test name rather than saying "the failing test".<br />
+				<br />
+				**Step 2: Investigate root cause**<br />
+				```<br />
+				debug_subagent({'{'}question: "What is the value of [variable] at [location]?"{'}'})<br />
+				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
+				```<br />
+				<br />
+				**Step 3: Apply your fix** (edit and terminal tools become available after debugging)<br />
+				<br />
+				**Step 4: Verify the fix works**<br />
+				```<br />
+				// If multiple tests were failing, check ALL of them:<br />
+				debug_subagent({'{'}
+				  question: "Do all the failing tests pass now after my fix?",
+				  tests: ["com.example.MyTest#test1", "com.example.MyTest#test2", "com.example.MyTest#test3"]
+				{'}'})<br />
+				```<br />
+				<br />
+				### Validation Loop - CRITICAL<br />
+				<br />
+				After applying a fix, verify it worked by running actual tests. If tests still fail, iterate:<br />
+				<br />
+				```<br />
+				while (tests still failing AND attempts {'<'} 3) {'{'}<br />
+				  1. Use debug_subagent to understand the current failure (NOT to verify if it passes)<br />
+				  2. Apply your fix based on the evidence<br />
+				  3. Run the actual test command (mvn test / gradle test) via run_in_terminal<br />
+				  4. Check the test output - did tests pass?<br />
+				     • If YES: Done! ✓<br />
+				     • If NO: Go back to step 1 with debug_subagent to understand the new failure<br />
+				{'}'}<br />
+				```<br />
+				<br />
+				**Example with iteration:**<br />
+				```<br />
+				// First attempt:<br />
+				1. debug_subagent: "What causes NullPointerException in com.example.MyTest#testMethod?"<br />
+				   → "variable X is null at line 50"<br />
+				2. Apply fix: Add null check for X<br />
+				3. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
+				   → Output: "Tests run: 1, Failures: 1" ✗ Still failing!<br />
+				<br />
+				// Second attempt - iterate:<br />
+				4. debug_subagent: "What causes the ArrayIndexOutOfBoundsException in com.example.MyTest#testMethod?"<br />
+				   → "Array length is 5 but accessing index 10"<br />
+				5. Apply fix: Add bounds check<br />
+				6. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
+				   → Output: "Tests run: 1, Failures: 0, Errors: 0" ✓ Success!<br />
+				```<br />
+				<br />
+				### ⚠️ CRITICAL: Verification Rules<br />
+				<br />
+				**NEVER use debug_subagent to verify if tests pass.**<br />
+				<br />
+				debug_subagent cannot reliably determine if tests pass because:<br />
+				- Tests may fail without throwing exceptions<br />
+				- Assertions may be caught/handled<br />
+				- Test frameworks report results differently<br />
+				<br />
+				**ALWAYS verify with actual test commands:**<br />
+				```<br />
+				run_in_terminal: "mvn test -Dtest=TestClass#testMethod"<br />
+				→ Parse output: "Tests run: X, Failures: Y, Errors: Z"<br />
+				→ If Y=0 and Z=0: Test passes ✓<br />
+				```<br />
+				<br />
+				**Use debug_subagent ONLY to understand failures, never to verify passes.**<br />
+				<br />
+				### Tips:<br />
+				- debug_subagent handles compilation automatically (incremental builds are fast)<br />
+				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
+				- If multiple tests fail, pass ALL failing tests to debug_subagent to understand them<br />
+				- ALWAYS verify fixes by running actual test commands (mvn test / gradle test)<br />
+				- If a fix doesn't work, iterate with another round of debugging via debug_subagent<br />
+			</Tag>
+			</>}
 			<Tag name='toolUseInstructions'>
 				If the user is requesting a code sample, you can answer it directly without using any tools.<br />
 				When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.<br />

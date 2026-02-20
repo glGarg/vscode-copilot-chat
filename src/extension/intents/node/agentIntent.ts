@@ -275,9 +275,9 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			// File editing - create_file always allowed for repro scripts
 			ToolName.CreateFile,            // create_file
 			// Edit tools - only available after debug_subagent has been called
-			//...(true ? [ToolName.ApplyPatch] : []),            // apply_patch
-			...(true ? [ToolName.ReplaceString] : []),         // replace_string_in_file
-			...(true ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
+			...(true ? [ToolName.ApplyPatch] : []),            // apply_patch
+			//...(true ? [ToolName.ReplaceString] : []),         // replace_string_in_file
+			//...(true ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
 			// Terminal - only available after debug_subagent has been called
 			...(true ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
 			// Planning

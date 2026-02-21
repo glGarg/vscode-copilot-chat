@@ -110,6 +110,11 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 
 	private toolCallResults: Record<string, LanguageModelToolResult2> = Object.create(null);
 	private toolCallRounds: IToolCallRound[] = [];
+	
+	/**
+	 * A pending reminder message to inject into the next prompt
+	 */
+	private pendingReminderMessage: string | undefined;
 
 	private readonly _onDidBuildPrompt = this._register(new Emitter<{ result: IBuildPromptResult; tools: LanguageModelToolInformation[]; promptTokenLength: number }>());
 	public readonly onDidBuildPrompt = this._onDidBuildPrompt.event;
@@ -205,9 +210,16 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		const chatVariables = new ChatVariablesCollection(request.references);
 
 		const isContinuation = this.turn.isContinuation;
-		const query = isContinuation ?
+		let query = isContinuation ?
 			'Please continue' :
 			this.turn.request.message;
+		
+		// If there's a pending reminder, append it to the query
+		if (this.pendingReminderMessage) {
+			query = `${query}\n\n[SYSTEM REMINDER]: ${this.pendingReminderMessage}`;
+			this.pendingReminderMessage = undefined; // Clear after use
+		}
+		
 		// exclude turns from the history that errored due to prompt filtration
 		const history = this.options.conversation.turns.slice(0, -1).filter(turn => turn.responseStatus !== TurnStatus.PromptFiltered);
 
@@ -279,37 +291,17 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 							
 							let reminderMessage: string;
 							if (!hasDebug && !hasEdit) {
-								reminderMessage = '⚠️ **You must debug AND fix the bug.** First, call `debug_subagent` to understand the root cause. Then use edit tools (apply_patch, replace_string_in_file, etc.) to implement the fix. Do not just explain - take action.';
+								reminderMessage = 'You MUST debug AND fix the bug. First, call debug_subagent to understand the root cause. Then use edit tools (apply_patch, replace_string_in_file, etc.) to implement the fix. Do not just explain - take action NOW.';
 							} else if (!hasDebug) {
-								reminderMessage = '⚠️ **You must call `debug_subagent` before making changes.** Use debug_subagent to understand the root cause of the bug, then apply your fix.';
+								reminderMessage = 'You MUST call debug_subagent before making changes. Use debug_subagent to understand the root cause of the bug, then apply your fix.';
 							} else {
-								reminderMessage = '⚠️ **You must make code changes to fix the bug.** You have debugged the issue - now use edit tools (apply_patch, replace_string_in_file, etc.) to implement the fix.';
+								reminderMessage = 'You MUST make code changes to fix the bug. You have debugged the issue - now use edit tools (apply_patch, replace_string_in_file, etc.) to implement the fix NOW.';
 							}
 							
 							this._logService.info(`[ToolCallingLoop] Agent tried to conclude without ${!hasDebug ? 'debugging' : ''}${!hasDebug && !hasEdit ? ' and ' : ''}${!hasEdit ? 'editing' : ''}. Reminder ${this.reminderCount}/${ToolCallingLoop.MAX_REMINDERS}`);
 							
-							// Create a synthetic tool call and result to inject the reminder
-							const reminderId = `debug-edit-reminder-${this.reminderCount}`;
-							const reminderToolCall: IToolCall = {
-								id: reminderId,
-								name: 'system_reminder',
-								arguments: JSON.stringify({ message: 'debug_and_edit_required' }),
-							};
-							
-							// Create a synthetic round with the reminder as if the assistant called a tool
-							const reminderRound = ToolCallRound.create({
-								response: result.round.response, // Keep the original response
-								toolCalls: [reminderToolCall],
-								toolInputRetry: 0,
-							});
-							
-							// Replace the last round (which had no tool calls) with one that has the reminder tool call
-							this.toolCallRounds[this.toolCallRounds.length - 1] = reminderRound;
-							
-							// Add the result for this tool call
-							this.toolCallResults[reminderId] = new LanguageModelToolResult2([
-								new MarkdownString(reminderMessage)
-							]);
+							// Set the pending reminder to be injected into the next query
+							this.pendingReminderMessage = reminderMessage;
 							
 							// Continue the loop instead of breaking
 							continue;

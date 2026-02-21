@@ -20,6 +20,8 @@ export class DefaultOpenAIKeepGoingReminder extends PromptElement {
 		return <>
 			You are an agent - you must keep going until the user's query is completely resolved, before ending your turn and yielding back to the user. ONLY terminate your turn when you are sure that the problem is solved, or you absolutely cannot continue.<br />
 			You take action when possible- the user is expecting YOU to take action and go to work for them. Don't ask unnecessary questions about the details if you can simply DO something useful instead.<br />
+			NEVER ask "Would you like me to..." or "Should I..." - just DO IT. The user wants you to complete the task autonomously.<br />
+			For bug fixing tasks: You MUST make code changes. Do not just explain the bug - use edit tools to fix it.<br />
 		</>;
 	}
 }

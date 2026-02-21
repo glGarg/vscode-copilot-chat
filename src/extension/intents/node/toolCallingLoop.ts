@@ -216,6 +216,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		
 		// If there's a pending reminder, append it to the query
 		if (this.pendingReminderMessage) {
+			this._logService.info(`[ToolCallingLoop] Injecting reminder into query: ${this.pendingReminderMessage.substring(0, 50)}...`);
 			query = `${query}\n\n[SYSTEM REMINDER]: ${this.pendingReminderMessage}`;
 			this.pendingReminderMessage = undefined; // Clear after use
 		}
@@ -299,6 +300,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 							}
 							
 							this._logService.info(`[ToolCallingLoop] Agent tried to conclude without ${!hasDebug ? 'debugging' : ''}${!hasDebug && !hasEdit ? ' and ' : ''}${!hasEdit ? 'editing' : ''}. Reminder ${this.reminderCount}/${ToolCallingLoop.MAX_REMINDERS}`);
+							this._logService.info(`[ToolCallingLoop] Setting pendingReminderMessage for next iteration`);
 							
 							// Set the pending reminder to be injected into the next query
 							this.pendingReminderMessage = reminderMessage;

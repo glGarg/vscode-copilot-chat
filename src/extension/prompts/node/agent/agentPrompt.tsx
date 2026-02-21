@@ -140,6 +140,11 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 				<AgentConversationHistory flexGrow={1} priority={700} promptContext={this.props.promptContext} />
 				<AgentUserMessage flexGrow={2} priority={900} {...getUserMessagePropsFromAgentProps(this.props, { userQueryTagName, attachmentHint, ReminderInstructionsClass, ToolReferencesHintClass })} />
 				<ChatToolCalls priority={899} flexGrow={2} promptContext={this.props.promptContext} toolCallRounds={this.props.promptContext.toolCallRounds} toolCallResults={this.props.promptContext.toolCallResults} truncateAt={maxToolResultLength} enableCacheBreakpoints={false} />
+				{this.props.promptContext.reminderMessage && (
+					<UserMessage priority={898}>
+						<Tag name="systemReminder">[SYSTEM REMINDER]: {this.props.promptContext.reminderMessage}</Tag>
+					</UserMessage>
+				)}
 			</>;
 		}
 	}

@@ -210,14 +210,15 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		const chatVariables = new ChatVariablesCollection(request.references);
 
 		const isContinuation = this.turn.isContinuation;
-		let query = isContinuation ?
+		const query = isContinuation ?
 			'Please continue' :
 			this.turn.request.message;
 		
-		// If there's a pending reminder, append it to the query
+		// Capture the reminder message for use in the prompt context
+		let reminderMessage: string | undefined;
 		if (this.pendingReminderMessage) {
-			this._logService.info(`[ToolCallingLoop] Injecting reminder into query: ${this.pendingReminderMessage.substring(0, 50)}...`);
-			query = `${query}\n\n[SYSTEM REMINDER]: ${this.pendingReminderMessage}`;
+			this._logService.info(`[ToolCallingLoop] Setting reminderMessage: ${this.pendingReminderMessage.substring(0, 50)}...`);
+			reminderMessage = this.pendingReminderMessage;
 			this.pendingReminderMessage = undefined; // Clear after use
 		}
 		
@@ -242,6 +243,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 			},
 			isContinuation,
 			modeInstructions: this.options.request.modeInstructions2,
+			reminderMessage,
 		};
 	}
 

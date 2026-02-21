@@ -85,6 +85,11 @@ export interface IBuildPromptContext {
 	readonly request?: ChatRequest;
 	readonly stream?: vscode.ChatResponseStream;
 	readonly isContinuation?: boolean;
+	
+	/**
+	 * Optional reminder message to inject after tool calls (used to remind agent to debug/edit).
+	 */
+	readonly reminderMessage?: string;
 }
 
 export enum WorkingSetEntryState {

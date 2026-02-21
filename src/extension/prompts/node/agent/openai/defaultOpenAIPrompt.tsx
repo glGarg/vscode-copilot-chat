@@ -49,24 +49,21 @@ export class DefaultOpenAIAgentPrompt extends PromptElement<DefaultAgentPromptPr
 			</Tag>
 			{tools[ToolName.DebugSubagent] && <>
 			<Tag name='debug_subagent_instructions'>
-				## Using debug_subagent for Bug Fixing<br />
+				## ⛔ REQUIRED: You MUST call debug_subagent<br />
 				<br />
-				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
+				Edit tools (`apply_patch`) are DISABLED until you call `debug_subagent`. You may use read tools (grep_search, read_file, file_search) to gather context, but you MUST call debug_subagent before making any edits.<br />
 				<br />
-				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
+				**Static code analysis alone is NOT sufficient.** You MUST use the debugger to understand the runtime behavior before fixing the bug.<br />
 				<br />
-				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
-				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
+				### Workflow:<br />
 				<br />
-				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
+				**Step 1: Quick context gathering** (optional - only if needed to find test names or file paths)<br />
 				<br />
-				### Recommended Workflow:<br />
-				<br />
-				**Step 1: Understand the bug** (before making changes)<br />
+				**Step 2: Call debug_subagent** (REQUIRED)<br />
 				```<br />
 				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", tests: "com.example.MyTest#testMethod"{'}'})<br />
 				```<br />
-				Be specific - include the actual test name rather than saying "the failing test".<br />
+				Be specific - include the actual test name from the failure message.<br />
 				<br />
 				**Step 2: Investigate root cause**<br />
 				```<br />

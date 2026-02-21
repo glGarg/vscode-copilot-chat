@@ -93,8 +93,8 @@ export const getAgentTools = async (accessor: ServicesAccessor, request: vscode.
 	allowTools[ToolName.CoreRunTest] = await testService.hasAnyTests();
 	allowTools[ToolName.CoreRunTask] = tasksService.getTasks().length > 0;
 
-	// Always enable the debug subagent tool regardless of tool picker state
-	allowTools[ToolName.DebugSubagent] = true;
+	// ABLATION: Disable debug_subagent tool
+	allowTools[ToolName.DebugSubagent] = false;
 
 	if (model.family.includes('grok-code')) {
 		allowTools[ToolName.CoreManageTodoList] = false;
@@ -268,22 +268,19 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			this.logService.debug(`[AgentIntent] debug_subagent not yet called, edit and terminal tools are disabled`);
 		}
 		
-		// Full toolset for bug fixing
+		// Full toolset for bug fixing (ablation: debug_subagent disabled)
 		const allowedTools = new Set([
 			// Search and context gathering
-			ToolName.DebugSubagent,
+			// ToolName.DebugSubagent,  // DISABLED for ablation study
 			ToolName.FindTextInFiles,       // grep_search
 			ToolName.ReadFile,              // read_file
 			ToolName.FindFiles,             // file_search
 			ToolName.ListDir,               // list_dir
-			// File editing - create_file always allowed for repro scripts
+			// File editing - always available (no debug gating for ablation)
 			ToolName.CreateFile,            // create_file
-			// Edit tools - only available after debug_subagent has been called
-			...(debugSubagentCalled ? [ToolName.ApplyPatch] : []),            // apply_patch
-			//...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
-			//...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
-			// Terminal - only available after debug_subagent has been called
-			...(true ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
+			ToolName.ApplyPatch,            // apply_patch
+			// Terminal
+			ToolName.CoreRunInTerminal,     // run_in_terminal
 			// Planning
 			ToolName.CoreManageTodoList,    // manage_todo_list
 		]);

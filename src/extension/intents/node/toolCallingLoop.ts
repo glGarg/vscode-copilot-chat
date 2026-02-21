@@ -288,8 +288,25 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 							
 							this._logService.info(`[ToolCallingLoop] Agent tried to conclude without ${!hasDebug ? 'debugging' : ''}${!hasDebug && !hasEdit ? ' and ' : ''}${!hasEdit ? 'editing' : ''}. Reminder ${this.reminderCount}/${ToolCallingLoop.MAX_REMINDERS}`);
 							
-							// Add a synthetic tool call result as a reminder
+							// Create a synthetic tool call and result to inject the reminder
 							const reminderId = `debug-edit-reminder-${this.reminderCount}`;
+							const reminderToolCall: IToolCall = {
+								id: reminderId,
+								name: 'system_reminder',
+								arguments: JSON.stringify({ message: 'debug_and_edit_required' }),
+							};
+							
+							// Create a synthetic round with the reminder as if the assistant called a tool
+							const reminderRound = ToolCallRound.create({
+								response: result.round.response, // Keep the original response
+								toolCalls: [reminderToolCall],
+								toolInputRetry: 0,
+							});
+							
+							// Replace the last round (which had no tool calls) with one that has the reminder tool call
+							this.toolCallRounds[this.toolCallRounds.length - 1] = reminderRound;
+							
+							// Add the result for this tool call
 							this.toolCallResults[reminderId] = new LanguageModelToolResult2([
 								new MarkdownString(reminderMessage)
 							]);

@@ -189,9 +189,9 @@ export class AgentIntent extends EditCodeIntent {
 	}
 
 	protected override getIntentHandlerOptions(request: vscode.ChatRequest): IDefaultIntentRequestHandlerOptions | undefined {
-		// Check if we should require debug and edit before conclusion
-		// This can be controlled via environment variable for testing
-		const requireDebugAndEdit = process.env.COPILOT_REQUIRE_DEBUG_AND_EDIT === 'true';
+		// Require debug and edit before conclusion by default
+		// Can be disabled via environment variable for testing
+		const requireDebugAndEdit = process.env.COPILOT_REQUIRE_DEBUG_AND_EDIT !== 'false';
 		
 		return {
 			maxToolCallIterations: getRequestedToolCallIterationLimit(request) ??

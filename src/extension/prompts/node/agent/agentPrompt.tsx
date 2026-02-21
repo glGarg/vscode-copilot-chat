@@ -133,6 +133,11 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 					ReminderInstructionsClass={ReminderInstructionsClass}
 					ToolReferencesHintClass={ToolReferencesHintClass}
 				/>
+				{this.props.promptContext.reminderMessage && (
+					<UserMessage priority={898}>
+						<Tag name="systemReminder">[SYSTEM REMINDER]: {this.props.promptContext.reminderMessage}</Tag>
+					</UserMessage>
+				)}
 			</>;
 		} else {
 			return <>

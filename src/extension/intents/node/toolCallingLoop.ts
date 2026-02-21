@@ -69,6 +69,21 @@ export interface IToolCallingLoopOptions {
 	 * The current chat request
 	 */
 	request: ChatRequest;
+	/**
+	 * If true, the agent must call both debug_subagent AND an edit tool before concluding.
+	 * When the agent tries to conclude without both, a reminder message is injected.
+	 */
+	requireDebugAndEditBeforeConclusion?: boolean;
+	/**
+	 * Tool names that count as "edit" tools for the requireDebugAndEditBeforeConclusion check.
+	 * Defaults to common edit tools if not specified.
+	 */
+	editToolNames?: Set<string>;
+	/**
+	 * Tool names that count as "debug" tools for the requireDebugAndEditBeforeConclusion check.
+	 * Defaults to debug_subagent if not specified.
+	 */
+	debugToolNames?: Set<string>;
 }
 
 export interface IToolCallingResponseEvent {
@@ -117,6 +132,66 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 	) {
 		super();
 	}
+
+	/**
+	 * Default edit tool names used when requireDebugAndEditBeforeConclusion is true
+	 */
+	private static readonly DEFAULT_EDIT_TOOLS = new Set([
+		'replace_string_in_file',
+		'multi_replace_string_in_file', 
+		'apply_patch',
+		'create_file',
+		ToolName.ReplaceString,
+		ToolName.MultiReplaceString,
+		ToolName.ApplyPatch,
+		ToolName.CreateFile,
+	]);
+
+	/**
+	 * Default debug tool names used when requireDebugAndEditBeforeConclusion is true
+	 */
+	private static readonly DEFAULT_DEBUG_TOOLS = new Set([
+		'debug_subagent',
+		ToolName.DebugSubagent,
+	]);
+
+	/**
+	 * Check if any edit tool has been called in the current conversation
+	 */
+	private hasCalledEditTool(): boolean {
+		const editTools = this.options.editToolNames ?? ToolCallingLoop.DEFAULT_EDIT_TOOLS;
+		
+		for (const round of this.toolCallRounds) {
+			for (const call of round.toolCalls) {
+				if (editTools.has(call.name)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Check if any debug tool has been called in the current conversation
+	 */
+	private hasCalledDebugTool(): boolean {
+		const debugTools = this.options.debugToolNames ?? ToolCallingLoop.DEFAULT_DEBUG_TOOLS;
+		
+		for (const round of this.toolCallRounds) {
+			for (const call of round.toolCalls) {
+				if (debugTools.has(call.name)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Number of times we've reminded the agent to debug/edit
+	 */
+	private reminderCount = 0;
+	private static readonly MAX_REMINDERS = 3;
 
 	/** Builds a prompt with the context. */
 	protected abstract buildPrompt(buildPromptContext: IBuildPromptContext, progress: Progress<ChatResponseReferencePart | ChatResponseProgressPart>, token: CancellationToken): Promise<IBuildPromptResult>;
@@ -191,6 +266,38 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 
 				this.toolCallRounds.push(result.round);
 				if (!result.round.toolCalls.length || result.response.type !== ChatFetchResponseType.Success) {
+					// Check if we should force the agent to continue (requireDebugAndEditBeforeConclusion)
+					if (this.options.requireDebugAndEditBeforeConclusion && 
+						this.reminderCount < ToolCallingLoop.MAX_REMINDERS &&
+						result.response.type === ChatFetchResponseType.Success) {
+						
+						const hasDebug = this.hasCalledDebugTool();
+						const hasEdit = this.hasCalledEditTool();
+						
+						if (!hasDebug || !hasEdit) {
+							this.reminderCount++;
+							
+							let reminderMessage: string;
+							if (!hasDebug && !hasEdit) {
+								reminderMessage = '⚠️ **You must debug AND fix the bug.** First, call `debug_subagent` to understand the root cause. Then use edit tools (apply_patch, replace_string_in_file, etc.) to implement the fix. Do not just explain - take action.';
+							} else if (!hasDebug) {
+								reminderMessage = '⚠️ **You must call `debug_subagent` before making changes.** Use debug_subagent to understand the root cause of the bug, then apply your fix.';
+							} else {
+								reminderMessage = '⚠️ **You must make code changes to fix the bug.** You have debugged the issue - now use edit tools (apply_patch, replace_string_in_file, etc.) to implement the fix.';
+							}
+							
+							this._logService.info(`[ToolCallingLoop] Agent tried to conclude without ${!hasDebug ? 'debugging' : ''}${!hasDebug && !hasEdit ? ' and ' : ''}${!hasEdit ? 'editing' : ''}. Reminder ${this.reminderCount}/${ToolCallingLoop.MAX_REMINDERS}`);
+							
+							// Add a synthetic tool call result as a reminder
+							const reminderId = `debug-edit-reminder-${this.reminderCount}`;
+							this.toolCallResults[reminderId] = new LanguageModelToolResult2([
+								new MarkdownString(reminderMessage)
+							]);
+							
+							// Continue the loop instead of breaking
+							continue;
+						}
+					}
 					lastResult = lastResult;
 					break;
 				}

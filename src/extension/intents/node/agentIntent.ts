@@ -189,13 +189,18 @@ export class AgentIntent extends EditCodeIntent {
 	}
 
 	protected override getIntentHandlerOptions(request: vscode.ChatRequest): IDefaultIntentRequestHandlerOptions | undefined {
+		// Check if we should require debug and edit before conclusion
+		// This can be controlled via environment variable for testing
+		const requireDebugAndEdit = process.env.COPILOT_REQUIRE_DEBUG_AND_EDIT === 'true';
+		
 		return {
 			maxToolCallIterations: getRequestedToolCallIterationLimit(request) ??
 				this.configurationService.getNonExtensionConfig('chat.agent.maxRequests') ??
 				200, // Fallback for simulation tests
 			temperature: this.configurationService.getConfig(ConfigKey.Advanced.AgentTemperature) ?? 0,
 			overrideRequestLocation: ChatLocation.Agent,
-			hideRateLimitTimeEstimate: true
+			hideRateLimitTimeEstimate: true,
+			requireDebugAndEditBeforeConclusion: requireDebugAndEdit,
 		};
 	}
 }
@@ -275,7 +280,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			// File editing - create_file always allowed for repro scripts
 			ToolName.CreateFile,            // create_file
 			// Edit tools - only available after debug_subagent has been called
-			...(true ? [ToolName.ApplyPatch] : []),            // apply_patch
+			...(debugSubagentCalled ? [ToolName.ApplyPatch] : []),            // apply_patch
 			//...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
 			//...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
 			// Terminal - only available after debug_subagent has been called

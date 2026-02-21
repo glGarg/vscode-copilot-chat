@@ -62,6 +62,11 @@ export interface IDefaultIntentRequestHandlerOptions {
 	temperature?: number;
 	overrideRequestLocation?: ChatLocation;
 	hideRateLimitTimeEstimate?: boolean;
+	/**
+	 * If true, the agent must call both debug_subagent AND an edit tool before concluding.
+	 * When the agent tries to conclude without both, a reminder message is injected.
+	 */
+	requireDebugAndEditBeforeConclusion?: boolean;
 }
 
 /*
@@ -305,6 +310,7 @@ export class DefaultIntentRequestHandler {
 				overrideRequestLocation: this.handlerOptions.overrideRequestLocation,
 				interactionContext: this.documentContext?.document.uri,
 				responseProcessor: typeof intentInvocation.processResponse === 'function' ? intentInvocation as IResponseProcessor : undefined,
+				requireDebugAndEditBeforeConclusion: this.handlerOptions.requireDebugAndEditBeforeConclusion,
 			},
 			this.chatTelemetryBuilder,
 		));

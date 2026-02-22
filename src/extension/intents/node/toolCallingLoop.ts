@@ -282,26 +282,19 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 				this.toolCallRounds.push(result.round);
 				if (!result.round.toolCalls.length || result.response.type !== ChatFetchResponseType.Success) {
 					// Check if we should force the agent to continue (requireDebugAndEditBeforeConclusion)
+					// ABLATION: Only require edit, not debug (no gating)
 					if (this.options.requireDebugAndEditBeforeConclusion && 
 						this.reminderCount < ToolCallingLoop.MAX_REMINDERS &&
 						result.response.type === ChatFetchResponseType.Success) {
 						
-						const hasDebug = this.hasCalledDebugTool();
 						const hasEdit = this.hasCalledEditTool();
 						
-						if (!hasDebug || !hasEdit) {
+						if (!hasEdit) {
 							this.reminderCount++;
 							
-							let reminderMessage: string;
-							if (!hasDebug && !hasEdit) {
-								reminderMessage = 'You MUST debug AND fix the bug. First, call debug_subagent to understand the root cause. Then use edit tools (apply_patch, replace_string_in_file, etc.) to implement the fix. Do not just explain - take action NOW.';
-							} else if (!hasDebug) {
-								reminderMessage = 'You MUST call debug_subagent before making changes. Use debug_subagent to understand the root cause of the bug, then apply your fix.';
-							} else {
-								reminderMessage = 'You MUST make code changes to fix the bug. You have debugged the issue - now use edit tools (apply_patch, replace_string_in_file, etc.) to implement the fix NOW.';
-							}
+							const reminderMessage = 'You MUST make code changes to fix the bug. Use edit tools (apply_patch) to implement the fix NOW. Do not just explain - take action.';
 							
-							this._logService.info(`[ToolCallingLoop] Agent tried to conclude without ${!hasDebug ? 'debugging' : ''}${!hasDebug && !hasEdit ? ' and ' : ''}${!hasEdit ? 'editing' : ''}. Reminder ${this.reminderCount}/${ToolCallingLoop.MAX_REMINDERS}`);
+							this._logService.info(`[ToolCallingLoop] Agent tried to conclude without editing. Reminder ${this.reminderCount}/${ToolCallingLoop.MAX_REMINDERS}`);
 							this._logService.info(`[ToolCallingLoop] Setting pendingReminderMessage for next iteration`);
 							
 							// Set the pending reminder to be injected into the next query

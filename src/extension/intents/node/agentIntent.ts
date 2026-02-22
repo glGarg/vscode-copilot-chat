@@ -261,13 +261,7 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 	public override async getAvailableTools(): Promise<vscode.LanguageModelToolInformation[]> {
 		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.request);
 		
-		// Check if debug_subagent has been called - edit tools are gated until it's called
-		const debugSubagentCalled = this.hasCalledDebugSubagent();
-		
-		if (!debugSubagentCalled) {
-			this.logService.debug(`[AgentIntent] debug_subagent not yet called, edit and terminal tools are disabled`);
-		}
-		
+		// ABLATION: No tool gating - all tools always available
 		// Full toolset for bug fixing
 		const allowedTools = new Set([
 			// Search and context gathering
@@ -276,14 +270,11 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 			ToolName.ReadFile,              // read_file
 			ToolName.FindFiles,             // file_search
 			ToolName.ListDir,               // list_dir
-			// File editing - create_file always allowed for repro scripts
+			// File editing
 			ToolName.CreateFile,            // create_file
-			// Edit tools - only available after debug_subagent has been called
-			...(debugSubagentCalled ? [ToolName.ApplyPatch] : []),            // apply_patch
-			//...(debugSubagentCalled ? [ToolName.ReplaceString] : []),         // replace_string_in_file
-			//...(debugSubagentCalled ? [ToolName.MultiReplaceString] : []),    // multi_replace_string_in_file
-			// Terminal - only available after debug_subagent has been called
-			...(true ? [ToolName.CoreRunInTerminal] : []),     // run_in_terminal
+			ToolName.ApplyPatch,            // apply_patch (no gating)
+			// Terminal
+			ToolName.CoreRunInTerminal,     // run_in_terminal (no gating)
 			// Planning
 			ToolName.CoreManageTodoList,    // manage_todo_list
 		]);

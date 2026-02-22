@@ -51,8 +51,6 @@ export class DefaultOpenAIAgentPrompt extends PromptElement<DefaultAgentPromptPr
 			<Tag name='debug_subagent_instructions'>
 				## ⛔ REQUIRED: You MUST call debug_subagent<br />
 				<br />
-				Edit tools (`apply_patch`) are DISABLED until you call `debug_subagent`. You may use read tools (grep_search, read_file, file_search) to gather context, but you MUST call debug_subagent before making any edits.<br />
-				<br />
 				**Static code analysis alone is NOT sufficient.** You MUST use the debugger to understand the runtime behavior before fixing the bug.<br />
 				<br />
 				### Workflow:<br />
@@ -71,7 +69,7 @@ export class DefaultOpenAIAgentPrompt extends PromptElement<DefaultAgentPromptPr
 				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
 				```<br />
 				<br />
-				**Step 3: Apply your fix** (edit and terminal tools become available after debugging)<br />
+				**Step 3: Apply your fix**<br />
 				<br />
 				**Step 4: Verify the fix works**<br />
 				```<br />

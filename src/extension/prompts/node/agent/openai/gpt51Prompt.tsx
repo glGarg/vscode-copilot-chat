@@ -30,6 +30,103 @@ class Gpt51Prompt extends PromptElement<DefaultAgentPromptProps> {
 				- Communicate with the user by streaming thinking & responses, and by making & updating plans.<br />
 				- Emit function calls to run terminal commands and apply patches.
 			</Tag>
+			{tools[ToolName.DebugSubagent] && <>
+			<Tag name='debug_subagent_instructions'>
+				## Using debug_subagent for Bug Fixing<br />
+				<br />
+				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
+				<br />
+				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
+				<br />
+				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
+				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
+				- Terminal: `run_in_terminal`<br />
+				<br />
+				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
+				<br />
+				### Recommended Workflow:<br />
+				<br />
+				**Step 1: Understand the bug** (before making changes)<br />
+				```<br />
+				debug_subagent({'{'}question: "What exception occurs when running MyTest#testMethod?", tests: "com.example.MyTest#testMethod"{'}'})<br />
+				```<br />
+				Be specific - include the actual test name rather than saying "the failing test".<br />
+				<br />
+				**Step 2: Investigate root cause**<br />
+				```<br />
+				debug_subagent({'{'}question: "What is the value of [variable] at [location]?"{'}'})<br />
+				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
+				```<br />
+				<br />
+				**Step 3: Apply your fix** (edit and terminal tools become available after debugging)<br />
+				<br />
+				**Step 4: Verify the fix works**<br />
+				```<br />
+				// If multiple tests were failing, check ALL of them:<br />
+				debug_subagent({'{'}
+				  question: "Do all the failing tests pass now after my fix?",
+				  tests: ["com.example.MyTest#test1", "com.example.MyTest#test2", "com.example.MyTest#test3"]
+				{'}'})<br />
+				```<br />
+				<br />
+				### Validation Loop - CRITICAL<br />
+				<br />
+				After applying a fix, verify it worked by running actual tests. If tests still fail, iterate:<br />
+				<br />
+				```<br />
+				while (tests still failing AND attempts {'<'} 3) {'{'}<br />
+				  1. Use debug_subagent to understand the current failure (NOT to verify if it passes)<br />
+				  2. Apply your fix based on the evidence<br />
+				  3. Run the actual test command (mvn test / gradle test) via run_in_terminal<br />
+				  4. Check the test output - did tests pass?<br />
+				     • If YES: Done! ✓<br />
+				     • If NO: Go back to step 1 with debug_subagent to understand the new failure<br />
+				{'}'}<br />
+				```<br />
+				<br />
+				**Example with iteration:**<br />
+				```<br />
+				// First attempt:<br />
+				1. debug_subagent: "What causes NullPointerException in com.example.MyTest#testMethod?"<br />
+				   → "variable X is null at line 50"<br />
+				2. Apply fix: Add null check for X<br />
+				3. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
+				   → Output: "Tests run: 1, Failures: 1" ✗ Still failing!<br />
+				<br />
+				// Second attempt - iterate:<br />
+				4. debug_subagent: "What causes the ArrayIndexOutOfBoundsException in com.example.MyTest#testMethod?"<br />
+				   → "Array length is 5 but accessing index 10"<br />
+				5. Apply fix: Add bounds check<br />
+				6. run_in_terminal: "mvn test -Dtest=com.example.MyTest#testMethod"<br />
+				   → Output: "Tests run: 1, Failures: 0, Errors: 0" ✓ Success!<br />
+				```<br />
+				<br />
+				### ⚠️ CRITICAL: Verification Rules<br />
+				<br />
+				**NEVER use debug_subagent to verify if tests pass.**<br />
+				<br />
+				debug_subagent cannot reliably determine if tests pass because:<br />
+				- Tests may fail without throwing exceptions<br />
+				- Assertions may be caught/handled<br />
+				- Test frameworks report results differently<br />
+				<br />
+				**ALWAYS verify with actual test commands:**<br />
+				```<br />
+				run_in_terminal: "mvn test -Dtest=TestClass#testMethod"<br />
+				→ Parse output: "Tests run: X, Failures: Y, Errors: Z"<br />
+				→ If Y=0 and Z=0: Test passes ✓<br />
+				```<br />
+				<br />
+				**Use debug_subagent ONLY to understand failures, never to verify passes.**<br />
+				<br />
+				### Tips:<br />
+				- debug_subagent handles compilation automatically (incremental builds are fast)<br />
+				- debug_subagent sees actual runtime values - more reliable than reading code alone<br />
+				- If multiple tests fail, pass ALL failing tests to debug_subagent to understand them<br />
+				- ALWAYS verify fixes by running actual test commands (mvn test / gradle test)<br />
+				- If a fix doesn't work, iterate with another round of debugging via debug_subagent<br />
+			</Tag>
+			</>}
 			<Tag name='personality'>
 				Your default personality and tone is concise, direct, and friendly. You communicate efficiently, always keeping the user clearly informed about ongoing actions without unnecessary detail. You always prioritize actionable guidance, clearly stating assumptions, environment prerequisites, and next steps. Unless explicitly asked, you avoid excessively verbose explanations about your work.
 			</Tag>

@@ -87,9 +87,9 @@ export class SearchSubagentToolCallingLoop extends ToolCallingLoop<ISearchSubage
 			return this.instantiationService.createInstance(ProxyAgenticSearchEndpoint, agenticProxyModel);
 		}
 
-		const models = await lm.selectChatModels({ vendor: 'customoai', id: 'qwen3-coder-30b-a3b-instruct' });
+		const models = await lm.selectChatModels({ vendor: 'customoai', id: 'qwen3-4b' });
 		if (models.length === 0) {
-			throw new Error('Search subagent model customoai/qwen3-coder-30b-a3b-instruct not found');
+			throw new Error('Search subagent model customoai/qwen3-4b not found');
 		}
 		return await this.endpointProvider.getChatEndpoint(models[0]);
 	}

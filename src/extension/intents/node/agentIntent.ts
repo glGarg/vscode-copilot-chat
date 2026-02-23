@@ -326,6 +326,8 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 
 	private _resolvedCustomizations: AgentPromptCustomizations | undefined;
 
+	private _hasCalledSearchSubagent = false;
+
 	private _lastRenderTokenCount: number = 0;
 
 	constructor(
@@ -352,8 +354,21 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		super(intent, location, endpoint, request, intentOptions, instantiationService, codeMapperService, envService, promptPathRepresentationService, endpointProvider, workspaceService, toolsService, configurationService, editLogService, commandService, telemetryService, notebookService);
 	}
 
-	public override getAvailableTools(): Promise<vscode.LanguageModelToolInformation[]> {
-		return this.instantiationService.invokeFunction(getAgentTools, this.request);
+	public override async getAvailableTools(): Promise<vscode.LanguageModelToolInformation[]> {
+		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.request);
+		
+		// On the first call, only provide search_subagent to force its usage
+		if (!this._hasCalledSearchSubagent) {
+			const searchSubagentTool = allTools.find(tool => tool.name === ToolName.SearchSubagent);
+			if (searchSubagentTool) {
+				this.logService.info('[AgentIntent] First tool call - forcing search_subagent only');
+				return [searchSubagentTool];
+			}
+			// If search_subagent is not available, fall through to return all tools
+			this.logService.warn('[AgentIntent] search_subagent not found in available tools');
+		}
+		
+		return allTools;
 	}
 
 	override async buildPrompt(
@@ -361,6 +376,17 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 		progress: vscode.Progress<vscode.ChatResponseReferencePart | vscode.ChatResponseProgressPart>,
 		token: vscode.CancellationToken
 	): Promise<IBuildPromptResult> {
+		// Check if search_subagent has been called in any previous rounds
+		if (!this._hasCalledSearchSubagent && promptContext.toolCallRounds) {
+			for (const round of promptContext.toolCallRounds) {
+				if (round.toolCalls.some(call => call.name === ToolName.SearchSubagent)) {
+					this.logService.info('[AgentIntent] Detected search_subagent call - enabling all tools');
+					this._hasCalledSearchSubagent = true;
+					break;
+				}
+			}
+		}
+
 		this._resolvedCustomizations = await PromptRegistry.resolveAllCustomizations(this.instantiationService, this.endpoint);
 		// Add any references from the codebase invocation to the request
 		const codebase = await this._getCodebaseReferences(promptContext, token);

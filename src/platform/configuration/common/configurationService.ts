@@ -716,6 +716,8 @@ export namespace ConfigKey {
 		export const SearchSubagentModel = defineSetting<string>('chat.searchSubagent.model', ConfigType.ExperimentBased, '');
 		/** Maximum number of tool calls the search subagent can make */
 		export const SearchSubagentToolCallLimit = defineSetting<number>('chat.searchSubagent.toolCallLimit', ConfigType.ExperimentBased, 4);
+		/** Whether to enable the semantic search (Codebase) tool in the search subagent */
+		export const SearchSubagentSemanticSearchEnabled = defineSetting<boolean>('chat.searchSubagent.semanticSearchEnabled', ConfigType.Simple, true);
 
 		export const InlineEditsTriggerOnEditorChangeAfterSeconds = defineAndMigrateExpSetting<number | undefined>('chat.advanced.inlineEdits.triggerOnEditorChangeAfterSeconds', 'chat.inlineEdits.triggerOnEditorChangeAfterSeconds', undefined);
 		export const InlineEditsNextCursorPredictionDisplayLine = defineAndMigrateExpSetting<boolean>('chat.advanced.inlineEdits.nextCursorPrediction.displayLine', 'chat.inlineEdits.nextCursorPrediction.displayLine', true);

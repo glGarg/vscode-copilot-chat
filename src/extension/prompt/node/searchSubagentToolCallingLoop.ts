@@ -118,9 +118,9 @@ export class SearchSubagentToolCallingLoop extends ToolCallingLoop<ISearchSubage
 		const semanticSearchEnabled = this._configurationService.getConfig(ConfigKey.Advanced.SearchSubagentSemanticSearchEnabled);
 		const allowedSearchTools = new Set([
 			...(semanticSearchEnabled ? [ToolName.Codebase] : []),
-			ToolName.FindFiles,
-			ToolName.FindTextInFiles,
-			ToolName.ReadFile
+                        ToolName.FindFiles,
+                        ToolName.FindTextInFiles,
+                        ToolName.ReadFile
 		]);
 
 		return allTools.filter(tool => allowedSearchTools.has(tool.name as ToolName));

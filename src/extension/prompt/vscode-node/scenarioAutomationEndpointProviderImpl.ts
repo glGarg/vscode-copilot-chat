@@ -7,13 +7,16 @@ import { ChatRequest, LanguageModelChat, lm } from 'vscode';
 import { ConfigKey } from '../../../platform/configuration/common/configurationService';
 import { ChatEndpointFamily } from '../../../platform/endpoint/common/endpointProvider';
 import { ExtensionContributedChatEndpoint } from '../../../platform/endpoint/vscode-node/extChatEndpoint';
+import { isScenarioAutomation } from '../../../platform/env/common/envService';
 import { IChatEndpoint } from '../../../platform/networking/common/networking';
 import { ProductionEndpointProvider } from './endpointProviderImpl';
 
 export class ScenarioAutomationEndpointProviderImpl extends ProductionEndpointProvider {
 	override async getChatEndpoint(requestOrFamilyOrModel: LanguageModelChat | ChatRequest | ChatEndpointFamily): Promise<IChatEndpoint> {
 		const isProxyingCAPI = !!this._configService.getConfig(ConfigKey.Shared.DebugOverrideCAPIUrl) || !!this._configService.getConfig(ConfigKey.Shared.DebugOverrideProxyUrl);
-		if (this._authService.copilotToken?.isNoAuthUser && !isProxyingCAPI) {
+		// In scenario automation without a CAPI proxy, route all requests through BYOK models
+		const useCustomModels = isScenarioAutomation && !isProxyingCAPI;
+		if (useCustomModels) {
 			// When using no auth in scenario automation, we want to force using a custom model / non-copilot for all requests
 			const getFirstNonCopilotModel = async () => {
 				const allModels = await lm.selectChatModels();

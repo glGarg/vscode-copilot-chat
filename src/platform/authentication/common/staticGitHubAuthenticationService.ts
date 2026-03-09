@@ -73,10 +73,14 @@ export class StaticGitHubAuthenticationService extends BaseAuthenticationService
 	 */
 	override get copilotToken(): CopilotToken | undefined {
 		const token = this._tokenStore.copilotToken;
-		if (this._configurationService.getConfig(ConfigKey.Advanced.DebugOverrideEmbeddingsUrl)) {
-			if (!token || token.isNoAuthUser) {
-				return new CopilotToken(createTestExtendedTokenInfo());
+		try {
+			if (this._configurationService.getConfig(ConfigKey.Advanced.DebugOverrideEmbeddingsUrl)) {
+				if (!token || token.isNoAuthUser) {
+					return new CopilotToken(createTestExtendedTokenInfo());
+				}
 			}
+		} catch {
+			// configurationService may not be fully initialized during early contribution construction
 		}
 		return token;
 	}

@@ -12,6 +12,7 @@ import { ConfigKey, IConfigurationService } from '../../../platform/configuratio
 import { DevContainerConfigGeneratorArguments, IDevContainerConfigurationService } from '../../../platform/devcontainer/common/devContainerConfigurationService';
 import { ICombinedEmbeddingIndex } from '../../../platform/embeddings/common/vscodeIndex';
 import { FEEDBACK_URL } from '../../../platform/endpoint/common/domainService';
+import { INativeEnvService, isScenarioAutomation } from '../../../platform/env/common/envService';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { IGitCommitMessageService } from '../../../platform/git/common/gitCommitMessageService';
 import { ILogService } from '../../../platform/log/common/logService';
@@ -89,8 +90,8 @@ export class ConversationFeature implements IExtensionContribution {
 
 		const activationBlockerDeferred = new DeferredPromise<void>();
 		this.activationBlocker = activationBlockerDeferred.p;
-		if (authenticationService.copilotToken) {
-			this.logService.info(`ConversationFeature: Copilot token already available`);
+		if (authenticationService.copilotToken || isScenarioAutomation) {
+			this.logService.info(`ConversationFeature: Copilot token already available (or scenario automation)`);
 			this.activated = true;
 			activationBlockerDeferred.complete();
 		} else {

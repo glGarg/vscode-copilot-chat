@@ -78,6 +78,10 @@ export function getOrCreateTestingCopilotTokenManager(deviceId: string): SyncDes
 
 	// In automation scenarios, NoAuth/BYOK-only scenarios are expected to not have any tokens set.
 	if (isScenarioAutomation) {
+		// No HMAC secret → pure BYOK mode. Use a fixed dummy token to prevent CAPI auth attempts.
+		if (!process.env.HMAC_SECRET) {
+			return new SyncDescriptor(FixedCopilotTokenManager, ['byok-no-auth']);
+		}
 		return new SyncDescriptor(CopilotTokenManagerFromDeviceId, [deviceId]);
 	}
 

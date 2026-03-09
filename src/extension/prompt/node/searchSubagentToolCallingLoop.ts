@@ -115,7 +115,7 @@ export class SearchSubagentToolCallingLoop extends ToolCallingLoop<ISearchSubage
 
 		// Only include tools relevant for search operations.
 		// The Codebase tool (semantic_search) is conditionally included based on config.
-		const semanticSearchEnabled = this.configurationService.getConfig(ConfigKey.Advanced.SearchSubagentSemanticSearchEnabled);
+		const semanticSearchEnabled = this._configurationService.getConfig(ConfigKey.Advanced.SearchSubagentSemanticSearchEnabled);
 		const allowedSearchTools = new Set([
 			...(semanticSearchEnabled ? [ToolName.Codebase] : []),
 			ToolName.FindFiles,

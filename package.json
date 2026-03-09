@@ -4461,6 +4461,14 @@
 							"onExp"
 						]
 					},
+					"github.copilot.chat.searchSubagent.semanticSearchEnabled": {
+						"type": "boolean",
+						"default": true,
+						"markdownDescription": "%github.copilot.config.searchSubagent.semanticSearchEnabled%",
+						"tags": [
+							"advanced"
+						]
+					},
 					"github.copilot.chat.otel.enabled": {
 						"type": "boolean",
 						"default": false,

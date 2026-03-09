@@ -163,6 +163,7 @@ export abstract class BaseAuthenticationService extends Disposable implements IA
 
 	protected fireAuthenticationChange(source: string): void {
 		const hasSession = !!this.copilotToken;
+		console.log(`[BYOK-DEBUG] fireAuthenticationChange from ${source}, hasToken=${hasSession}`);
 		this._logService.info(`AuthenticationService: firing onDidAuthenticationChange from ${source}. Has token: ${hasSession}`);
 		this._onDidAuthenticationChange.fire();
 	}
@@ -180,7 +181,9 @@ export abstract class BaseAuthenticationService extends Disposable implements IA
 		@IConfigurationService protected readonly _configurationService: IConfigurationService,
 	) {
 		super();
+		console.log('[BYOK-DEBUG] BaseAuthenticationService constructor: registering onDidCopilotTokenRefresh listener');
 		this._register(_tokenManager.onDidCopilotTokenRefresh(() => {
+			console.log('[BYOK-DEBUG] BaseAuthenticationService: onDidCopilotTokenRefresh fired, calling _handleAuthChangeEvent');
 			this._logService.debug('Handling CopilotToken refresh.');
 			void this._handleAuthChangeEvent();
 		}));
@@ -238,19 +241,18 @@ export abstract class BaseAuthenticationService extends Disposable implements IA
 		return this._tokenStore.copilotToken;
 	}
 	async getCopilotToken(force?: boolean): Promise<CopilotToken> {
+		console.log(`[BYOK-DEBUG] BaseAuthenticationService.getCopilotToken called, force=${force}, storeHasToken=${!!this._tokenStore.copilotToken}`);
 		try {
 			const token = await this._tokenManager.getCopilotToken(force);
+			console.log(`[BYOK-DEBUG] BaseAuthenticationService.getCopilotToken: got token, sku=${token.sku}, storing in tokenStore`);
 			this._tokenStore.copilotToken = token;
 			this._copilotTokenError = undefined;
 			return token;
 		} catch (afterError) {
+			console.log(`[BYOK-DEBUG] BaseAuthenticationService.getCopilotToken: ERROR - ${(afterError as Error).message}`);
 			this._tokenStore.copilotToken = undefined;
 			const beforeError = this._copilotTokenError;
 			this._copilotTokenError = afterError;
-			// This handles the case where the user still can't get a Copilot Token,
-			// but the error has change. I.e. They go from being not signed in (no copilot token can be minted)
-			// to an account that doesn't have a valid subscription (no copilot token can be minted).
-			// NOTE: if either error is undefined, this event should be fired elsewhere already.
 			if (beforeError && afterError && beforeError.message !== afterError.message) {
 				this.fireAuthenticationChange('getCopilotToken error change');
 			}
@@ -279,6 +281,7 @@ export abstract class BaseAuthenticationService extends Disposable implements IA
 		const anyAdoSessionBefore = this._anyAdoSession;
 		const copilotTokenBefore = this._tokenStore.copilotToken;
 		const copilotTokenErrorBefore = this._copilotTokenError;
+		console.log(`[BYOK-DEBUG] _handleAuthChangeEvent START: copilotTokenBefore=${copilotTokenBefore?.token?.substring(0, 10) ?? 'undefined'}, anyGitHubSession=${!!anyGitHubSessionBefore}`);
 
 		// Update caches
 		const resolved = await Promise.allSettled([
@@ -292,13 +295,15 @@ export abstract class BaseAuthenticationService extends Disposable implements IA
 			}
 		}
 
+		console.log(`[BYOK-DEBUG] _handleAuthChangeEvent after sessions: anyGitHubChanged=${anyGitHubSessionBefore?.accessToken !== this._anyGitHubSession?.accessToken}, permissiveChanged=${permissiveGitHubSessionBefore?.accessToken !== this._permissiveGitHubSession?.accessToken}`);
+
 		if (
 			anyGitHubSessionBefore?.accessToken !== this._anyGitHubSession?.accessToken ||
 			permissiveGitHubSessionBefore?.accessToken !== this._permissiveGitHubSession?.accessToken
 		) {
+			console.log('[BYOK-DEBUG] _handleAuthChangeEvent: access token changed, minting new token');
 			this._onDidAccessTokenChange.fire();
 			this._logService.debug('Auth state changed, minting a new CopilotToken...');
-			// The auth state has changed, so mint a new Copilot token
 			try {
 				await this.getCopilotToken(true);
 			} catch (e) {
@@ -314,16 +319,18 @@ export abstract class BaseAuthenticationService extends Disposable implements IA
 		}
 
 		// Auth state hasn't changed, but the Copilot token might have
+		console.log(`[BYOK-DEBUG] _handleAuthChangeEvent: calling getCopilotToken (no force), storeToken before=${this._tokenStore.copilotToken?.token?.substring(0, 10) ?? 'undefined'}`);
 		try {
 			await this.getCopilotToken();
 		} catch (e) {
-			// Ignore errors
+			console.log(`[BYOK-DEBUG] _handleAuthChangeEvent: getCopilotToken failed: ${(e as Error).message}`);
 		}
 
-		if (copilotTokenBefore?.token !== this._tokenStore.copilotToken?.token ||
-			// React to errors changing too (i.e. I go from zero session to a session that doesn't have Copilot access)
-			copilotTokenErrorBefore?.message !== this._copilotTokenError?.message
-		) {
+		const tokenChanged = copilotTokenBefore?.token !== this._tokenStore.copilotToken?.token;
+		const errorChanged = copilotTokenErrorBefore?.message !== this._copilotTokenError?.message;
+		console.log(`[BYOK-DEBUG] _handleAuthChangeEvent: tokenChanged=${tokenChanged}, errorChanged=${errorChanged}, copilotTokenBefore=${copilotTokenBefore?.token?.substring(0, 10) ?? 'undefined'}, copilotTokenAfter=${this._tokenStore.copilotToken?.token?.substring(0, 10) ?? 'undefined'}`);
+
+		if (tokenChanged || errorChanged) {
 			this._logService.debug('CopilotToken state changed, firing event.');
 			this.fireAuthenticationChange('handleAuthChangeEvent');
 		}

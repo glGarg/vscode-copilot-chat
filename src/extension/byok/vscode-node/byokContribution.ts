@@ -39,9 +39,11 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 	) {
 		super();
 		this._byokStorageService = new BYOKStorageService(extensionContext);
+		console.log(`[BYOK-DEBUG] BYOKContrib constructor: isScenarioAutomation=${isScenarioAutomation}, calling _authChange`);
 		this._authChange(authService, this._instantiationService);
 
 		this._register(authService.onDidAuthenticationChange(() => {
+			console.log('[BYOK-DEBUG] BYOKContrib: onDidAuthenticationChange fired, calling _authChange');
 			this._authChange(authService, this._instantiationService);
 		}));
 	}
@@ -52,37 +54,43 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 		const shouldRegister = isScenarioAutomation
 			? !this._byokProvidersRegistered
 			: authService.copilotToken && isBYOKEnabled(authService.copilotToken, this._capiClientService) && !this._byokProvidersRegistered;
+		console.log(`[BYOK-DEBUG] BYOKContrib._authChange: isScenarioAutomation=${isScenarioAutomation}, hasToken=${!!authService.copilotToken}, alreadyRegistered=${this._byokProvidersRegistered}, shouldRegister=${shouldRegister}`);
 
 		if (shouldRegister) {
 			this._byokProvidersRegistered = true;
-			// Update known models list from CDN so all providers have the same list
-			const knownModels = await this.fetchKnownModelList(this._fetcherService);
-			this._providers.set(OllamaLMProvider.providerName.toLowerCase(), instantiationService.createInstance(OllamaLMProvider, this._byokStorageService));
-			this._providers.set(AnthropicLMProvider.providerName.toLowerCase(), instantiationService.createInstance(AnthropicLMProvider, knownModels[AnthropicLMProvider.providerName], this._byokStorageService));
-			this._providers.set(GeminiNativeBYOKLMProvider.providerName.toLowerCase(), instantiationService.createInstance(GeminiNativeBYOKLMProvider, knownModels[GeminiNativeBYOKLMProvider.providerName], this._byokStorageService));
-			this._providers.set(XAIBYOKLMProvider.providerName.toLowerCase(), instantiationService.createInstance(XAIBYOKLMProvider, knownModels[XAIBYOKLMProvider.providerName], this._byokStorageService));
-			this._providers.set(OAIBYOKLMProvider.providerName.toLowerCase(), instantiationService.createInstance(OAIBYOKLMProvider, knownModels[OAIBYOKLMProvider.providerName], this._byokStorageService));
-			this._providers.set(OpenRouterLMProvider.providerName.toLowerCase(), instantiationService.createInstance(OpenRouterLMProvider, this._byokStorageService));
-			this._providers.set(AzureBYOKModelProvider.providerName.toLowerCase(), instantiationService.createInstance(AzureBYOKModelProvider, this._byokStorageService));
-			this._providers.set(CustomOAIBYOKModelProvider.providerName.toLowerCase(), instantiationService.createInstance(CustomOAIBYOKModelProvider, this._byokStorageService));
+			try {
+				const knownModels = await this.fetchKnownModelList(this._fetcherService);
+				this._providers.set(OllamaLMProvider.providerName.toLowerCase(), instantiationService.createInstance(OllamaLMProvider, this._byokStorageService));
+				this._providers.set(AnthropicLMProvider.providerName.toLowerCase(), instantiationService.createInstance(AnthropicLMProvider, knownModels[AnthropicLMProvider.providerName], this._byokStorageService));
+				this._providers.set(GeminiNativeBYOKLMProvider.providerName.toLowerCase(), instantiationService.createInstance(GeminiNativeBYOKLMProvider, knownModels[GeminiNativeBYOKLMProvider.providerName], this._byokStorageService));
+				this._providers.set(XAIBYOKLMProvider.providerName.toLowerCase(), instantiationService.createInstance(XAIBYOKLMProvider, knownModels[XAIBYOKLMProvider.providerName], this._byokStorageService));
+				this._providers.set(OAIBYOKLMProvider.providerName.toLowerCase(), instantiationService.createInstance(OAIBYOKLMProvider, knownModels[OAIBYOKLMProvider.providerName], this._byokStorageService));
+				this._providers.set(OpenRouterLMProvider.providerName.toLowerCase(), instantiationService.createInstance(OpenRouterLMProvider, this._byokStorageService));
+				this._providers.set(AzureBYOKModelProvider.providerName.toLowerCase(), instantiationService.createInstance(AzureBYOKModelProvider, this._byokStorageService));
+				this._providers.set(CustomOAIBYOKModelProvider.providerName.toLowerCase(), instantiationService.createInstance(CustomOAIBYOKModelProvider, this._byokStorageService));
 
-			for (const [providerName, provider] of this._providers) {
-				this._store.add(lm.registerLanguageModelChatProvider(providerName, provider));
+				for (const [providerName, provider] of this._providers) {
+					this._store.add(lm.registerLanguageModelChatProvider(providerName, provider));
+				}
+				this._logService.info('BYOK: All providers registered successfully.');
+			} catch (e) {
+				this._logService.error('BYOK: Failed to register providers:', e);
+				this._byokProvidersRegistered = false;
 			}
 		}
 	}
 	private async fetchKnownModelList(fetcherService: IFetcherService): Promise<Record<string, BYOKKnownModels>> {
-		const data = await (await fetcherService.fetch('https://main.vscode-cdn.net/extensions/copilotChat.json', { method: 'GET' })).json();
-		// Use this for testing with changes from a local file. Don't check in
-		// const data = JSON.parse((await this._fileSystemService.readFile(URI.file('/Users/roblou/code/vscode-engineering/chat/copilotChat.json'))).toString());
-		let knownModels: Record<string, BYOKKnownModels>;
-		if (data.version !== 1) {
-			this._logService.warn('BYOK: Copilot Chat known models list is not in the expected format. Defaulting to empty list.');
-			knownModels = {};
-		} else {
-			knownModels = data.modelInfo;
+		try {
+			const data = await (await fetcherService.fetch('https://main.vscode-cdn.net/extensions/copilotChat.json', { method: 'GET' })).json();
+			if (data.version !== 1) {
+				this._logService.warn('BYOK: Copilot Chat known models list is not in the expected format. Defaulting to empty list.');
+				return {};
+			}
+			this._logService.info('BYOK: Copilot Chat known models list fetched successfully.');
+			return data.modelInfo;
+		} catch (e) {
+			this._logService.warn('BYOK: Failed to fetch known models from CDN, using empty list:', e);
+			return {};
 		}
-		this._logService.info('BYOK: Copilot Chat known models list fetched successfully.');
-		return knownModels;
 	}
 }

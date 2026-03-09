@@ -64,15 +64,19 @@ export function createStaticGitHubTokenProvider(): (() => string) | undefined {
 }
 
 export function getOrCreateTestingCopilotTokenManager(deviceId: string): SyncDescriptor<ICopilotTokenManager & CheckCopilotToken> {
+	console.log(`[BYOK-DEBUG] getOrCreateTestingCopilotTokenManager called. isScenarioAutomation=${isScenarioAutomation}, HMAC_SECRET=${!!process.env.HMAC_SECRET}, VSCODE_COPILOT_CHAT_TOKEN=${!!process.env.VSCODE_COPILOT_CHAT_TOKEN}, GITHUB_OAUTH_TOKEN=${!!process.env.GITHUB_OAUTH_TOKEN}, GITHUB_PAT=${!!process.env.GITHUB_PAT}`);
 	if (process.env.VSCODE_COPILOT_CHAT_TOKEN) {
+		console.log('[BYOK-DEBUG] Using StaticExtendedTokenInfoCopilotTokenManager (VSCODE_COPILOT_CHAT_TOKEN)');
 		return new SyncDescriptor(StaticExtendedTokenInfoCopilotTokenManager, [process.env.VSCODE_COPILOT_CHAT_TOKEN]);
 	}
 
 	if (process.env.GITHUB_OAUTH_TOKEN) {
+		console.log('[BYOK-DEBUG] Using CopilotTokenManagerFromGitHubToken');
 		return new SyncDescriptor(CopilotTokenManagerFromGitHubToken, [process.env.GITHUB_OAUTH_TOKEN, 'unknown']);
 	}
 
 	if (process.env.GITHUB_PAT) {
+		console.log('[BYOK-DEBUG] Using FixedCopilotTokenManager (GITHUB_PAT)');
 		return new SyncDescriptor(FixedCopilotTokenManager, [process.env.GITHUB_PAT]);
 	}
 
@@ -80,8 +84,10 @@ export function getOrCreateTestingCopilotTokenManager(deviceId: string): SyncDes
 	if (isScenarioAutomation) {
 		// No HMAC secret → pure BYOK mode. Use a fixed dummy token to prevent CAPI auth attempts.
 		if (!process.env.HMAC_SECRET) {
+			console.log('[BYOK-DEBUG] Using FixedCopilotTokenManager (byok-no-auth, no HMAC_SECRET)');
 			return new SyncDescriptor(FixedCopilotTokenManager, ['byok-no-auth']);
 		}
+		console.log('[BYOK-DEBUG] Using CopilotTokenManagerFromDeviceId (has HMAC_SECRET)');
 		return new SyncDescriptor(CopilotTokenManagerFromDeviceId, [deviceId]);
 	}
 
@@ -118,8 +124,10 @@ export abstract class BaseCopilotTokenManager extends Disposable implements ICop
 		return this._copilotToken;
 	}
 	set copilotToken(token: ExtendedTokenInfo | undefined) {
+		console.log(`[BYOK-DEBUG] BaseCopilotTokenManager.copilotToken setter: old=${!!this._copilotToken}, new=${!!token}, changed=${token !== this._copilotToken}`);
 		if (token !== this._copilotToken) {
 			this._copilotToken = token;
+			console.log('[BYOK-DEBUG] BaseCopilotTokenManager: firing onDidCopilotTokenRefresh');
 			this._copilotTokenRefreshEmitter.fire();
 		}
 	}
@@ -383,7 +391,9 @@ export class FixedCopilotTokenManager extends BaseCopilotTokenManager implements
 		@IEnvService envService: IEnvService
 	) {
 		super(new NullBaseOctoKitService(capiClientService, fetcherService, logService, telemetryService), logService, telemetryService, domainService, capiClientService, fetcherService, envService);
+		console.log(`[BYOK-DEBUG] FixedCopilotTokenManager constructor, token=${_completionsToken.substring(0, 10)}...`);
 		this.copilotToken = createTestExtendedTokenInfo({ token: _completionsToken, username: 'fixedTokenManager', copilot_plan: 'unknown' });
+		console.log(`[BYOK-DEBUG] FixedCopilotTokenManager: copilotToken set, sku=${this.copilotToken?.sku}, individual=${this.copilotToken?.individual}`);
 	}
 
 	set completionsToken(token: string) {
@@ -395,6 +405,7 @@ export class FixedCopilotTokenManager extends BaseCopilotTokenManager implements
 	}
 
 	async getCopilotToken(): Promise<CopilotToken> {
+		console.log(`[BYOK-DEBUG] FixedCopilotTokenManager.getCopilotToken called, has token=${!!this.copilotToken}`);
 		return new CopilotToken(this.copilotToken!);
 	}
 

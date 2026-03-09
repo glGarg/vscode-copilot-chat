@@ -50,19 +50,33 @@ class AuthUpgradeAsk extends Disposable {
 	}
 
 	private async waitForChatEnabled() {
+		console.log('[BYOK-DEBUG] waitForChatEnabled: START');
 		try {
 			await this._authenticationService.getCopilotToken();
+			console.log('[BYOK-DEBUG] waitForChatEnabled: getCopilotToken succeeded');
 		} catch (error) {
-			// likely due to the user canceling the auth flow
+			console.log(`[BYOK-DEBUG] waitForChatEnabled: getCopilotToken failed: ${(error as Error).message}`);
 			this._logService.error(error, 'Failed to get copilot token');
+		}
+
+		const hasTokenNow = this._authenticationService.copilotToken !== undefined;
+		console.log(`[BYOK-DEBUG] waitForChatEnabled: copilotToken after getCopilotToken=${hasTokenNow}. Will ${hasTokenNow ? 'SKIP' : 'WAIT for'} onDidAuthenticationChange.`);
+		if (hasTokenNow) {
+			// Token already available, no need to wait for the event
+			return;
 		}
 
 		await Event.toPromise(
 			Event.filter(
 				this._authenticationService.onDidAuthenticationChange,
-				() => this._authenticationService.copilotToken !== undefined
+				() => {
+					const has = this._authenticationService.copilotToken !== undefined;
+					console.log(`[BYOK-DEBUG] waitForChatEnabled: onDidAuthenticationChange filter check, hasToken=${has}`);
+					return has;
+				}
 			)
 		);
+		console.log('[BYOK-DEBUG] waitForChatEnabled: DONE');
 	}
 
 	private registerListeners() {

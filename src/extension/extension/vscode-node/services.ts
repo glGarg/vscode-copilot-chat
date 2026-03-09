@@ -179,6 +179,7 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	const internalLargeEventAIKey = extensionContext.extension.packageJSON.internalLargeStorageAriaKey ?? '';
 	const ariaKey = extensionContext.extension.packageJSON.ariaKey ?? '';
 	if (isTestMode || isScenarioAutomation) {
+		console.log(`[BYOK-DEBUG] services.ts: isTestMode=${isTestMode}, isScenarioAutomation=${isScenarioAutomation}, setting up testing token manager`);
 		setupTelemetry(builder, extensionContext, internalAIKey, internalLargeEventAIKey, ariaKey);
 		// If we're in testing mode, then most code will be called from an actual test,
 		// and not from here. However, some objects will capture the `accessor` we pass
@@ -192,6 +193,7 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	}
 
 	if (isScenarioAutomation) {
+		console.log(`[BYOK-DEBUG] services.ts: isScenarioAutomation block — registering ScenarioAutomation services`);
 		builder.define(IAuthenticationService, new SyncDescriptor(StaticGitHubAuthenticationService, [createStaticGitHubTokenProvider()]));
 		builder.define(IEndpointProvider, new SyncDescriptor(ScenarioAutomationEndpointProviderImpl));
 		builder.define(IIgnoreService, new SyncDescriptor(NullIgnoreService));

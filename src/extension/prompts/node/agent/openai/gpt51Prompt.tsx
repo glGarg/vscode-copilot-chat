@@ -43,9 +43,9 @@ class Gpt51PromptResolver implements IAgentPrompt {
 		return Gpt51ReminderInstructions;
 	}
 
-	resolveToolReferencesHint(endpoint: IChatEndpoint): ToolReferencesHintConstructor | undefined {
-		return Gpt51ToolReferencesHint;
-	}
+	//resolveToolReferencesHint(endpoint: IChatEndpoint): ToolReferencesHintConstructor | undefined {
+	//	return Gpt51ToolReferencesHint;
+	//}
 
 	resolveCopilotIdentityRules(endpoint: IChatEndpoint): CopilotIdentityRulesConstructor | undefined {
 		return GPT5CopilotIdentityRule;

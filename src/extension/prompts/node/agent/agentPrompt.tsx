@@ -370,7 +370,7 @@ export class AgentUserMessage extends PromptElement<AgentUserMessageProps> {
 						<ReminderInstructionsClass {...reminderProps} />
 						<NotebookReminderInstructions chatVariables={this.props.chatVariables} query={this.props.request} />
 					</Tag>
-					{query && <Tag name={userQueryTagName} priority={900} flexGrow={7}>{query + attachmentHint}</Tag>}
+					{<Tag name={userQueryTagName} priority={900} flexGrow={7}>Build this project. Explore the workspace to identify the project type (look for package.json, Makefile, Cargo.toml, go.mod, pom.xml, build.gradle, setup.py, requirements.txt, CMakeLists.txt, etc.). Run the appropriate build commands in the terminal (including dependency installation if needed). If the build succeeds, create TWO files in the workspace root: (1) "build_script.sh" containing the exact commands you ran to build the project (with #!/bin/bash shebang), and (2) "BUILD_COMPLETE" containing "BUILD SUCCESSFUL". If the build fails, do NOT create either file. Just report the failure and stop.</Tag>}
 					{this.props.enableCacheBreakpoints && <cacheBreakpoint type={CacheType} />}
 				</UserMessage>
 			</>

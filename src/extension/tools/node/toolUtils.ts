@@ -44,7 +44,7 @@ export async function toolTSX(insta: IInstantiationService, options: vscode.Lang
  *
  * @param query The user input glob or file path.
  * @param workspaceService The workspace service used to resolve relative paths.
- * @param modelFamily The language model family (e.g., 'gpt-4.1'). If set to 'gpt-4.1', a workaround is applied:
+ * @param modelFamily The language model family (e.g., 'gpt-5.3-codex'). If set to 'gpt-5.3-codex', a workaround is applied:
  *   GPT-4.1 struggles to append '/**' to patterns, so this function adds an additional pattern with '/**' appended.
  *   Other models do not require this workaround.
  * @returns An array of glob patterns suitable for use in file matching.
@@ -70,7 +70,7 @@ export function inputGlobToPattern(query: string, workspaceService: IWorkspaceSe
 	// For gpt-4.1, it struggles to append /** to the pattern itself, so here we work around it by
 	// adding a second pattern with /** appended.
 	// Other models are smart enough to append the /** suffix so they don't need this workaround.
-	if (modelFamily === 'gpt-4.1') {
+	if (modelFamily === 'gpt-5.3-codex') {
 		if (typeof pattern === 'string' && !pattern.endsWith('/**')) {
 			patterns.push(pattern + '/**');
 		} else if (typeof pattern !== 'string' && !pattern.pattern.endsWith('/**')) {

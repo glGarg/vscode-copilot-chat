@@ -4081,7 +4081,7 @@
 					},
 					"github.copilot.chat.instantApply.shortContextModelName": {
 						"type": "string",
-						"default": "gpt-4o-instant-apply-full-ft-v66-short",
+						"default": "gpt-5.3-codex",
 						"markdownDescription": "%github.copilot.config.instantApply.shortContextModelName%",
 						"tags": [
 							"advanced",

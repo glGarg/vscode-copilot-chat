@@ -283,23 +283,21 @@ export class LanguageModelServer implements ILanguageModelServer {
 
 	private selectEndpoint(endpoints: readonly IChatEndpoint[], requestedModel?: string): IChatEndpoint | undefined {
 		if (requestedModel) {
-			// Handle model mapping
+			// Handle model mapping — route everything to gpt-5.3-codex
 			let mappedModel = requestedModel;
 			if (requestedModel.startsWith('claude-3-5-haiku')) {
-				mappedModel = 'gpt-4o-mini';
+				mappedModel = 'gpt-5.3-codex';
 			}
 			if (requestedModel.startsWith('claude-sonnet-4')) {
-				mappedModel = 'claude-sonnet-4';
+				mappedModel = 'gpt-5.3-codex';
 			}
 
 			// Try to find exact match first
 			let selectedEndpoint = endpoints.find(e => e.family === mappedModel || e.model === mappedModel);
 
-			// If not found, try to find by partial match for Anthropic models
-			if (!selectedEndpoint && requestedModel.startsWith('claude-3-5-haiku')) {
-				selectedEndpoint = endpoints.find(e => e.model.includes('gpt-4o-mini')) ?? endpoints.find(e => e.model.includes('mini'));
-			} else if (!selectedEndpoint && requestedModel.startsWith('claude-sonnet-4')) {
-				selectedEndpoint = endpoints.find(e => e.model.includes('claude-sonnet-4')) ?? endpoints.find(e => e.model.includes('claude'));
+			// If not found, fall back to gpt-5.3-codex
+			if (!selectedEndpoint) {
+				selectedEndpoint = endpoints.find(e => e.family === 'gpt-5.3-codex' || e.model.includes('gpt-5.3-codex'));
 			}
 
 			return selectedEndpoint;

@@ -115,7 +115,7 @@ export function isCompletionModelInformation(model: IModelAPIResponse): model is
 	return model.capabilities.type === 'completion';
 }
 
-export type ChatEndpointFamily = 'gpt-4.1' | 'gpt-5-mini' | 'copilot-base' | 'copilot-fast';
+export type ChatEndpointFamily = 'gpt-5.3-codex' | 'gpt-5-mini' | 'copilot-base' | 'copilot-fast';
 export type EmbeddingsEndpointFamily = 'text3small' | 'metis';
 
 export interface IEndpointProvider {

@@ -468,7 +468,7 @@ class ConversationHistorySummarizer {
 	private async getSummary(mode: SummaryMode, propsInfo: ISummarizedConversationHistoryInfo): Promise<FetchSuccess<string>> {
 		const stopwatch = new StopWatch(false);
 		const forceGpt41 = this.configurationService.getExperimentBasedConfig(ConfigKey.Advanced.AgentHistorySummarizationForceGpt41, this.experimentationService);
-		const gpt41Endpoint = await this.endpointProvider.getChatEndpoint('gpt-4.1');
+		const gpt41Endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.3-codex');
 		const endpoint = forceGpt41 && (gpt41Endpoint.modelMaxPromptTokens >= this.props.endpoint.modelMaxPromptTokens) ?
 			gpt41Endpoint :
 			this.props.endpoint;
@@ -781,7 +781,7 @@ class SummaryMessageElement extends PromptElement<SummaryMessageProps> {
 			<Tag name='conversation-summary'>
 				{this.props.summaryText}
 			</Tag>
-			{this.props.endpoint.family === 'gpt-4.1' && <Tag name='reminderInstructions'>
+			{this.props.endpoint.family === 'gpt-5.3-codex' && <Tag name='reminderInstructions'>
 				<DefaultOpenAIKeepGoingReminder />
 			</Tag>}
 		</UserMessage>;

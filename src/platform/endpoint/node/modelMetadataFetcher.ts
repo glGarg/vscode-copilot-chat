@@ -166,8 +166,8 @@ export class ModelMetadataFetcher extends Disposable implements IModelMetadataFe
 		let resolvedModel: IModelAPIResponse | undefined;
 		family = ModelAliasRegistry.resolveAlias(family) as ChatEndpointFamily;
 
-		if (family === 'gpt-4.1') {
-			resolvedModel = this._familyMap.get('gpt-4.1')?.[0] ?? this._familyMap.get('gpt-4o')?.[0];
+		if (family === 'gpt-5.3-codex') {
+			resolvedModel = this._familyMap.get('gpt-5.3-codex')?.[0];
 		} else if (family === 'copilot-base') {
 			resolvedModel = this._copilotBaseModel;
 		} else {

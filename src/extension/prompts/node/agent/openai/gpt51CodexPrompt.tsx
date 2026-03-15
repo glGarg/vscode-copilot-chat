@@ -111,15 +111,11 @@ class Gpt51CodexPrompt extends PromptElement<DefaultAgentPromptProps> {
 			<Tag name='debug_subagent_instructions'>
 				## Using debug_subagent for Bug Fixing<br />
 				<br />
-				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help verify fixes. Use it to understand bugs before making changes.<br />
+				You have access to `debug_subagent` - a debugging tool that can inspect runtime values, trace execution, and help understand bugs.<br />
 				<br />
-				### ⛔ TOOLS ARE DISABLED UNTIL YOU DEBUG<br />
+				### ⚠️ YOU MUST DEBUG BEFORE EDITING<br />
 				<br />
-				The following tools are NOT available until you have completed root cause analysis using `debug_subagent`:<br />
-				- Edit tools: `replace_string_in_file`, `multi_replace_string_in_file`, `apply_patch`<br />
-				- Terminal: `run_in_terminal`<br />
-				<br />
-				You can still use `create_file` to write reproduction scripts, and read tools (`read_file`, `grep_search`, `file_search`, `list_dir`) to explore the codebase.<br />
+				You MUST use `debug_subagent` to understand the root cause of a bug BEFORE making any edits or running terminal commands. Do not skip this step.<br />
 				<br />
 				### Recommended Workflow:<br />
 				<br />
@@ -135,7 +131,7 @@ class Gpt51CodexPrompt extends PromptElement<DefaultAgentPromptProps> {
 				debug_subagent({'{'}question: "Why does [condition] evaluate to [value]?", file: "File.java", line: N{'}'})<br />
 				```<br />
 				<br />
-				**Step 3: Apply your fix** (edit and terminal tools become available after debugging)<br />
+				**Step 3: Apply your fix** (only after using debug_subagent)<br />
 				<br />
 				**Step 4: Verify the fix works**<br />
 				```<br />

@@ -257,12 +257,8 @@ export class AgentIntentInvocation extends EditCodeIntentInvocation implements I
 	public override async getAvailableTools(): Promise<vscode.LanguageModelToolInformation[]> {
 		const allTools = await this.instantiationService.invokeFunction(getAgentTools, this.request);
 		
-		// Check if debug_subagent has been called - edit tools are gated until it's called
-		const debugSubagentCalled = this.hasCalledDebugSubagent();
-		
-		if (!debugSubagentCalled) {
-			this.logService.debug(`[AgentIntent] debug_subagent not yet called, edit and terminal tools are disabled`);
-		}
+		// debug_subagent gating is disabled - all tools are always available
+		const debugSubagentCalled = true;
 		
 		// Full toolset for bug fixing
 		const allowedTools = new Set([

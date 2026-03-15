@@ -4040,6 +4040,15 @@
 							"experimental"
 						]
 					},
+					"github.copilot.chat.debugSubagent.model": {
+						"type": "string",
+						"default": "",
+						"markdownDescription": "Override the model used by the debug subagent. Format: `vendor/modelId` (e.g. `azure/deepprompt-gpt-5.2-2025-12-11-global`). If empty, uses the main agent's model.",
+						"tags": [
+							"advanced",
+							"experimental"
+						]
+					},
 					"github.copilot.chat.inlineEdits.diagnosticsContextProvider.enabled": {
 						"type": "boolean",
 						"default": false,

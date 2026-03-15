@@ -103,6 +103,7 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 			allowedTools,
 			customPromptClass: DebugSubagentPrompt as typeof DebugSubagentPrompt & PromptElementCtor,
 			forceFinalAnswer: true, // Force a text response if hitting tool limit without answer
+			modelSelector: this._getDebugSubagentModelSelector(),
 		});
 
 		const stream = this._inputContext?.stream && ChatResponseStreamImpl.filter(
@@ -239,6 +240,24 @@ class DebugSubagentTool implements ICopilotTool<IDebugSubagentParams> {
 	async resolveInput(input: IDebugSubagentParams, promptContext: IBuildPromptContext, _mode: CopilotToolMode): Promise<IDebugSubagentParams> {
 		this._inputContext = promptContext;
 		return input;
+	}
+
+	private _getDebugSubagentModelSelector(): { vendor: string; id: string } | undefined {
+		const vscodeModule = require('vscode') as typeof import('vscode');
+		const modelSetting = vscodeModule.workspace.getConfiguration('github.copilot.chat').get<string>('debugSubagent.model');
+		if (!modelSetting) {
+			return undefined;
+		}
+		// Parse "vendor/modelId" format — vendor is everything before first /, modelId is the rest
+		const slashIndex = modelSetting.indexOf('/');
+		if (slashIndex === -1) {
+			console.log(`[DebugSubagentTool] debugSubagent.model setting "${modelSetting}" missing vendor prefix, using as id with 'copilot' vendor`);
+			return { vendor: 'copilot', id: modelSetting };
+		}
+		const vendor = modelSetting.substring(0, slashIndex);
+		const id = modelSetting.substring(slashIndex + 1);
+		console.log(`[DebugSubagentTool] Using custom model: vendor=${vendor}, id=${id}`);
+		return { vendor, id };
 	}
 }
 

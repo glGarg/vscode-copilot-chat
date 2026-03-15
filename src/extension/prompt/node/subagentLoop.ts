@@ -36,6 +36,8 @@ export interface ISubagentToolCallingLoopOptions extends IToolCallingLoopOptions
 	customPromptClass?: PromptElementCtor;
 	/** If true, do one more LLM call without tools after hitting limit to force a text response */
 	forceFinalAnswer?: boolean;
+	/** Optional: override the model used by this subagent (vendor + id from vscode.lm.selectChatModels) */
+	modelSelector?: { vendor: string; id: string };
 }
 
 export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallingLoopOptions> {
@@ -115,6 +117,33 @@ export class SubagentToolCallingLoop extends ToolCallingLoop<ISubagentToolCallin
 	}
 
 	private async getEndpoint(request: ChatRequest) {
+		// If a custom model selector is provided, use it to select a specific model
+		if (this.options.modelSelector) {
+			const selector = this.options.modelSelector;
+			this._logService.info(`[SubagentToolCallingLoop] Using custom model selector: ${selector.vendor}/${selector.id}`);
+			try {
+				const models = await vscode.lm.selectChatModels(selector);
+				if (!models || models.length === 0) {
+					this._logService.error(`[SubagentToolCallingLoop] No models found for selector: ${JSON.stringify(selector)}`);
+					await this.logAvailableModels();
+					throw new Error(`No models found matching selector: ${JSON.stringify(selector)}`);
+				}
+				const endpoint = await this.endpointProvider.getChatEndpoint(models[0]);
+				this._logService.info('[SubagentToolCallingLoop] Selected custom endpoint:', {
+					endpointModel: endpoint.model,
+					endpointFamily: endpoint.family,
+					supportsToolCalls: endpoint.supportsToolCalls,
+				});
+				if (!endpoint.supportsToolCalls) {
+					throw new Error(`Model ${endpoint.model} does not support tool calls, which is required for subagent`);
+				}
+				return endpoint;
+			} catch (error) {
+				this._logService.error(`[SubagentToolCallingLoop] Failed to get custom endpoint: ${error instanceof Error ? error.message : String(error)}`);
+				throw error;
+			}
+		}
+
 		// Use the same model as the main agent to ensure consistent tool calling behavior
 		this._logService.info('[SubagentToolCallingLoop] Using main agent model (from request)');
 		const endpoint = await this.endpointProvider.getChatEndpoint(request);

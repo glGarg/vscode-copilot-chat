@@ -70,6 +70,12 @@ export const PromptRegistry = new class {
 		endpoint: IChatEndpoint
 	): Promise<IAgentPromptCtor | undefined> {
 
+		// [Experiment] Force all models to use DefaultOpenAIPrompt
+		const gptEntry = this.familyPrefixList.find(e => e.prefix === 'gpt');
+		if (gptEntry) {
+			return gptEntry.prompt;
+		}
+
 		for (const prompt of this.promptsWithMatcher) {
 			const matches = await prompt.matchesModel(endpoint);
 			if (matches) {

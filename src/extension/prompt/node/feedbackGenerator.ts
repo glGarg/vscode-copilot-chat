@@ -54,7 +54,7 @@ export class FeedbackGenerator {
 			};
 		}
 
-		const endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.3-codex');
+		const endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.2');
 
 		const prompts: RenderPromptResult[] = [];
 		const batches = [filteredInput];

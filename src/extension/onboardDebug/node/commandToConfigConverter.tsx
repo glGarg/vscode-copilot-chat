@@ -51,7 +51,7 @@ export class DebugCommandToConfigConverter implements IDebugCommandToConfigConve
 	public async convert(cwd: string, args: readonly string[], token: CancellationToken): Promise<IDebugConfigResult> {
 		const relCwd = getPathRelativeToWorkspaceFolder(cwd, this.workspace);
 
-		const endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.3-codex');
+		const endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.2');
 		const promptRenderer = PromptRenderer.create(
 			this.instantiationService,
 			endpoint,

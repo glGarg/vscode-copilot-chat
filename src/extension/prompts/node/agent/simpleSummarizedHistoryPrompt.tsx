@@ -83,7 +83,7 @@ export class SimpleSummarizedHistory extends PromptElement<SummarizedAgentHistor
 		if (entry.round.summary) {
 			return <ChunkTag name='conversation-summary' priority={priorityOverride}>
 				{entry.round.summary}
-				{this.props.endpoint.family === 'gpt-5.3-codex' && <Tag name='reminderInstructions'>
+				{this.props.endpoint.family === 'gpt-5.2' && <Tag name='reminderInstructions'>
 					<DefaultOpenAIKeepGoingReminder />
 				</Tag>}
 			</ChunkTag>;

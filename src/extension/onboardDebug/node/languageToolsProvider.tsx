@@ -30,7 +30,7 @@ export class LanguageToolsProvider {
 	}
 
 	public async getToolsForLanguages(languages: string[], token: CancellationToken) {
-		const endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.3-codex');
+		const endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.2');
 		const promptRenderer = PromptRenderer.create(
 			this.instantiationService,
 			endpoint,

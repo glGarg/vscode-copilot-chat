@@ -49,7 +49,7 @@ export class DevContainerConfigGenerator {
 
 		const startTime = Date.now();
 
-		const endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.3-codex');
+		const endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.2');
 		const charLimit = Math.floor((endpoint.modelMaxPromptTokens * 4) / 3);
 
 		const processedFilenames = this.processFilenames(filenames, charLimit);

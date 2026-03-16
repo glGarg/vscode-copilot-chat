@@ -24,7 +24,7 @@ export interface ICompletionsModelManagerService {
 	getCurrentModelRequestInfo(featureSettings?: TelemetryWithExp): ModelRequestInfo;
 }
 
-const FallbackModelId = 'gpt-5.3-codex';
+const FallbackModelId = 'gpt-5.2';
 export class AvailableModelsManager extends Disposable implements ICompletionsModelManagerService {
 	declare _serviceBrand: undefined;
 	fetchedModelData: ICompletionModelInformation[] = [];

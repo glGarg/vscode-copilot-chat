@@ -545,22 +545,22 @@ export const HARD_TOOL_LIMIT = 128;
 // These values are used in the request and are case sensitive. Do not change them unless advised by CAPI.
 // It is also not recommended to use this as a type as it will never be an exhaustive list
 export const enum CHAT_MODEL {
-	GPT41 = 'gpt-5.3-codex',
-	GPT4OMINI = 'gpt-5.3-codex',
+	GPT41 = 'gpt-5.2',
+	GPT4OMINI = 'gpt-5.2',
 	NES_XTAB = 'copilot-nes-xtab', // xtab model hosted in prod in proxy
 	CUSTOM_NES = 'custom-nes',
 	XTAB_4O_MINI_FINETUNED = 'xtab-4o-mini-finetuned',
-	GPT4OPROXY = 'gpt-5.3-codex',
-	SHORT_INSTANT_APPLY = 'gpt-5.3-codex',
-	CLAUDE_SONNET = 'gpt-5.3-codex',
-	CLAUDE_37_SONNET = 'gpt-5.3-codex',
+	GPT4OPROXY = 'gpt-5.2',
+	SHORT_INSTANT_APPLY = 'gpt-5.2',
+	CLAUDE_SONNET = 'gpt-5.2',
+	CLAUDE_37_SONNET = 'gpt-5.2',
 	DEEPSEEK_CHAT = 'deepseek-chat',
 	GEMINI_25_PRO = 'gemini-2.5-pro',
 	GEMINI_20_PRO = 'gemini-2.0-pro-exp-02-05',
 	GEMINI_FLASH = 'gemini-2.0-flash-001',
-	O1 = 'gpt-5.3-codex',
-	O3MINI = 'gpt-5.3-codex',
-	O1MINI = 'gpt-5.3-codex',
+	O1 = 'gpt-5.2',
+	O3MINI = 'gpt-5.2',
+	O1MINI = 'gpt-5.2',
 	// A placeholder model that is used for just quickly testing new Azure endpoints.
 	// This model is not intended to be used for any real work.
 	EXPERIMENTAL = 'experimental-01'
@@ -766,7 +766,7 @@ export namespace ConfigKey {
 		export const InlineEditsUndoInsertionFiltering = defineTeamInternalSetting<'v1' | 'v2' | undefined>('chat.advanced.inlineEdits.undoInsertionFiltering', ConfigType.ExperimentBased, 'v1');
 		export const InlineEditsIgnoreWhenSuggestVisible = defineTeamInternalSetting<boolean>('chat.advanced.inlineEdits.ignoreWhenSuggestVisible', ConfigType.ExperimentBased, false);
 		export const InlineEditsJointCompletionsProviderEnabled = defineTeamInternalSetting<boolean>('chat.advanced.inlineEdits.jointCompletionsProvider.enabled', ConfigType.ExperimentBased, false);
-		export const InstantApplyModelName = defineTeamInternalSetting<string>('chat.advanced.instantApply.modelName', ConfigType.ExperimentBased, 'gpt-5.3-codex');
+		export const InstantApplyModelName = defineTeamInternalSetting<string>('chat.advanced.instantApply.modelName', ConfigType.ExperimentBased, 'gpt-5.2');
 		export const VerifyTextDocumentChanges = defineTeamInternalSetting<boolean>('chat.advanced.inlineEdits.verifyTextDocumentChanges', ConfigType.ExperimentBased, false);
 
 		// TODO: @sandy081 - These should be moved away from this namespace

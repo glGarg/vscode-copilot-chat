@@ -41,7 +41,7 @@ export class McpToolCallingLoop extends ToolCallingLoop<IMcpToolCallingLoopOptio
 	private async getEndpoint(request: ChatRequest) {
 		let endpoint = await this.endpointProvider.getChatEndpoint(this.options.request);
 		if (!endpoint.supportsToolCalls) {
-			endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.3-codex');
+			endpoint = await this.endpointProvider.getChatEndpoint('gpt-5.2');
 		}
 		return endpoint;
 	}

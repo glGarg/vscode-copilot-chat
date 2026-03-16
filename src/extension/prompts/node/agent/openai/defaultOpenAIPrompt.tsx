@@ -225,7 +225,7 @@ class DefaultOpenAIPromptResolver implements IAgentPrompt {
 	}
 
 	resolveAttachmentHint(endpoint: IChatEndpoint): string | undefined {
-		if (endpoint.family === 'gpt-5.3-codex') {
+		if (endpoint.family === 'gpt-5.2') {
 			return ' (See <attachments> above for file contents. You may not need to search or read the file again.)';
 		}
 		return undefined;

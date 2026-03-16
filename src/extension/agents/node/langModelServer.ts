@@ -283,21 +283,21 @@ export class LanguageModelServer implements ILanguageModelServer {
 
 	private selectEndpoint(endpoints: readonly IChatEndpoint[], requestedModel?: string): IChatEndpoint | undefined {
 		if (requestedModel) {
-			// Handle model mapping — route everything to gpt-5.3-codex
+			// Handle model mapping — route everything to gpt-5.2
 			let mappedModel = requestedModel;
 			if (requestedModel.startsWith('claude-3-5-haiku')) {
-				mappedModel = 'gpt-5.3-codex';
+				mappedModel = 'gpt-5.2';
 			}
 			if (requestedModel.startsWith('claude-sonnet-4')) {
-				mappedModel = 'gpt-5.3-codex';
+				mappedModel = 'gpt-5.2';
 			}
 
 			// Try to find exact match first
 			let selectedEndpoint = endpoints.find(e => e.family === mappedModel || e.model === mappedModel);
 
-			// If not found, fall back to gpt-5.3-codex
+			// If not found, fall back to gpt-5.2
 			if (!selectedEndpoint) {
-				selectedEndpoint = endpoints.find(e => e.family === 'gpt-5.3-codex' || e.model.includes('gpt-5.3-codex'));
+				selectedEndpoint = endpoints.find(e => e.family === 'gpt-5.2' || e.model.includes('gpt-5.2'));
 			}
 
 			return selectedEndpoint;

@@ -235,7 +235,7 @@ class AnthropicAdapter implements IProtocolAdapter {
 		}
 
 		// If we don't have endpoint info, return the unadjusted usage
-		if (context.endpoint.modelId === 'gpt-5.3-codex') {
+		if (context.endpoint.modelId === 'gpt-5.2') {
 			return usage;
 		}
 

@@ -47,4 +47,4 @@ export class ModelAliasRegistry {
 	}
 }
 
-ModelAliasRegistry.registerAlias('copilot-fast', 'gpt-5.3-codex');
+ModelAliasRegistry.registerAlias('copilot-fast', 'gpt-5.2');

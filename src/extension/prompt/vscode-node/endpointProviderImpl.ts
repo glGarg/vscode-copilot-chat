@@ -83,6 +83,17 @@ export class ProductionEndpointProvider implements IEndpointProvider {
 		return chatEndpoint;
 	}
 
+	private async _getFallbackEndpoint(): Promise<IChatEndpoint> {
+		// Hardcoded fallback: use Azure GPT-5.2 when family resolution fails (custom model setup)
+		const vscodeModule = require('vscode') as typeof import('vscode');
+		const models = await vscodeModule.lm.selectChatModels({ vendor: 'azure', id: 'deepprompt-gpt-5.2-2025-12-11-global' });
+		if (models && models.length > 0) {
+			this._logService.info(`[EndpointProvider] Falling back to azure/deepprompt-gpt-5.2-2025-12-11-global`);
+			return this._instantiationService.createInstance(ExtensionContributedChatEndpoint, models[0]);
+		}
+		throw new Error('azure/deepprompt-gpt-5.2-2025-12-11-global not available');
+	}
+
 	async getChatEndpoint(requestOrFamilyOrModel: LanguageModelChat | ChatRequest | ChatEndpointFamily): Promise<IChatEndpoint> {
 		this._logService.trace(`Resolving chat model`);
 
@@ -107,21 +118,30 @@ export class ProductionEndpointProvider implements IEndpointProvider {
 		let endpoint: IChatEndpoint;
 		if (typeof requestOrFamilyOrModel === 'string') {
 			// The family case, resolve the chat model for the passed in family
-			const modelMetadata = await this._modelFetcher.getChatModelFromFamily(requestOrFamilyOrModel);
-			endpoint = this.getOrCreateChatEndpointInstance(modelMetadata!);
+			try {
+				const modelMetadata = await this._modelFetcher.getChatModelFromFamily(requestOrFamilyOrModel);
+				endpoint = this.getOrCreateChatEndpointInstance(modelMetadata);
+			} catch {
+				// Family not found (e.g. using custom models without CAPI) — fall back to hardcoded GPT-5.2
+				this._logService.warn(`Could not resolve model family '${requestOrFamilyOrModel}', using fallback endpoint`);
+				return this._getFallbackEndpoint();
+			}
 		} else {
 			const model = 'model' in requestOrFamilyOrModel ? requestOrFamilyOrModel.model : requestOrFamilyOrModel;
 			if (model && model.vendor === 'copilot' && model.id === AutoChatEndpoint.pseudoModelId) {
 				return this._autoModeService.resolveAutoModeEndpoint(requestOrFamilyOrModel as ChatRequest, Array.from(this._chatEndpoints.values()));
 			} else if (model && model.vendor === 'copilot') {
-				const modelMetadata = await this._modelFetcher.getChatModelFromApiModel(model);
-				// If we fail to resolve a model since this is panel we give GPT-4.1. This really should never happen as the picker is powered by the same service.
-				endpoint = modelMetadata ? this.getOrCreateChatEndpointInstance(modelMetadata) : await this.getChatEndpoint('gpt-5.3-codex');
+				try {
+					const modelMetadata = await this._modelFetcher.getChatModelFromApiModel(model);
+					endpoint = modelMetadata ? this.getOrCreateChatEndpointInstance(modelMetadata) : await this._getFallbackEndpoint();
+				} catch {
+					endpoint = await this._getFallbackEndpoint();
+				}
 			} else if (model) {
 				endpoint = this._instantiationService.createInstance(ExtensionContributedChatEndpoint, model);
 			} else {
-				// No explicit family passed and no model picker = gpt-4.1 class model
-				endpoint = await this.getChatEndpoint('gpt-5.3-codex');
+				// No explicit family passed and no model picker — use fallback
+				endpoint = await this._getFallbackEndpoint();
 			}
 		}
 

@@ -152,6 +152,11 @@ export const getAgentTools = async (accessor: ServicesAccessor, request: vscode.
 			return allowTools[tool.name];
 		}
 
+		// When execution subagent is the only allowed tool, block everything else
+		if (executionSubagentEnabled && allowTools[ToolName.ExecutionSubagent]) {
+			return false;
+		}
+
 		// Must return undefined to fall back to other checks
 		return undefined;
 	});

@@ -113,7 +113,16 @@ export const getAgentTools = async (accessor: ServicesAccessor, request: vscode.
 	allowTools[ToolName.SearchSubagent] = isGptOrAnthropic && searchSubagentEnabled;
 
 	const executionSubagentEnabled = configurationService.getExperimentBasedConfig(ConfigKey.Advanced.ExecutionSubagentToolEnabled, experimentationService);
-	allowTools[ToolName.ExecutionSubagent] = isGptOrAnthropic && executionSubagentEnabled;
+	allowTools[ToolName.ExecutionSubagent] = executionSubagentEnabled;
+
+	// When execution subagent is enabled, disable all other tools so the model is forced to use it
+	if (executionSubagentEnabled) {
+		for (const key of Object.keys(allowTools)) {
+			if (key !== ToolName.ExecutionSubagent) {
+				allowTools[key] = false;
+			}
+		}
+	}
 
 	if (model.family.includes('grok-code')) {
 		allowTools[ToolName.CoreManageTodoList] = false;

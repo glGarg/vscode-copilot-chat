@@ -5,6 +5,7 @@
 
 import { randomUUID } from 'crypto';
 import type { CancellationToken, ChatRequest, ChatResponseStream, LanguageModelToolInformation, Progress } from 'vscode';
+import { lm } from 'vscode';
 import { IAuthenticationChatUpgradeService } from '../../../platform/authentication/common/authenticationUpgrade';
 import { IChatHookService } from '../../../platform/chat/common/chatHookService';
 import { ChatLocation, ChatResponse } from '../../../platform/chat/common/commonTypes';
@@ -81,7 +82,13 @@ export class ExecutionSubagentToolCallingLoop extends ToolCallingLoop<IExecution
 		const modelName = this._configurationService.getConfig(ConfigKey.Advanced.ExecutionSubagentModel) as ChatEndpointFamily;
 		if (modelName) {
 			try {
-				let endpoint = await this.endpointProvider.getChatEndpoint(modelName);
+				// Resolve the model object via selectChatModels so we pass a LanguageModelChat
+				// (not a string) to getChatEndpoint — this ensures custom models are routed correctly
+				const models = await lm.selectChatModels({ vendor: 'customoai', id: modelName || undefined });
+				if (models.length === 0) {
+					throw new Error(`Execution subagent model customoai/${modelName} not found`);
+				}
+				let endpoint = await this.endpointProvider.getChatEndpoint(models[0]);
 				if (!endpoint.supportsToolCalls) {
 					this._logService.warn(`[ExecutionSubagentToolCallingLoop] Configured model ${modelName} does not support tool calls. Falling back to request's endpoint.`);
 					endpoint = await this.endpointProvider.getChatEndpoint(this.options.request);
